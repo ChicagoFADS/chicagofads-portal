@@ -1029,6 +1029,23 @@ async function loadState() {
   }
 
   populateLoginDropdown();
+
+  // Restore login session if user previously logged in
+  try {
+    const saved = sessionStorage.getItem('currentUser');
+    if (saved) {
+      currentUser = JSON.parse(saved);
+      document.getElementById('loginPage').style.display = 'none';
+      document.getElementById('appHeader').style.display = 'flex';
+      document.getElementById('appMain').style.display = 'block';
+      document.getElementById('headerName').textContent = currentUser.name;
+      if (currentUser.type === 'organizer') {
+        showOrganizerView();
+      } else {
+        showStudioView(currentUser.name);
+      }
+    }
+  } catch(e) {}
 }
 
 async function saveState() {
@@ -1116,6 +1133,9 @@ function doLogin() {
     ? { type: 'organizer', name: 'Organizer' }
     : { type: 'studio', name: studio };
 
+  // Persist login across refreshes
+  sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('appHeader').style.display = 'flex';
   document.getElementById('appMain').style.display = 'block';
@@ -1134,6 +1154,7 @@ document.addEventListener('keydown', e => {
 
 function doLogout() {
   currentUser = null;
+  sessionStorage.removeItem('currentUser');
   document.getElementById('loginPage').style.display = 'flex';
   document.getElementById('appHeader').style.display = 'none';
   document.getElementById('appMain').style.display = 'none';
@@ -2507,6 +2528,10 @@ async function renderVisitingTab() {
             <button class="btn btn-sm btn-outline" style="width:auto;margin-top:0;flex:1" onclick="openVisitingEntry('${safeName}')">Enter Data</button>
             <button class="btn btn-sm" style="width:auto;margin-top:0;flex:1;background:var(--gold);color:var(--black)" onclick="generateRegistrationPDF('${safeName}','${comp}')">PDF</button>
           </div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+            <button class="btn btn-sm" style="flex:1;margin-top:0;background:var(--dark);color:#fff;font-size:0.55rem" onclick="printDinnerLabels('${comp}','${safeName}')">🍽️ Dinner Labels</button>
+            <button class="btn btn-sm btn-outline" style="flex:1;margin-top:0;font-size:0.55rem" onclick="printRegistrationLabels('${comp}','${safeName}')">🏷️ Reg Labels</button>
+          </div>
         </div>`;
     }
     html += `</div>`;
@@ -2861,9 +2886,9 @@ function printDinnerLabels(comp, studioFilter) {
     .label-text { flex: 1; overflow: hidden; }
     .label-name {
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 14pt;
-      font-style: italic;
-      font-weight: 700;
+      font-size: 15pt;
+      font-style: normal;
+      font-weight: 900;
       line-height: 1.2;
       white-space: nowrap;
       overflow: hidden;
