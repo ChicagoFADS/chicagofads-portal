@@ -6,6 +6,21 @@
 <title>Chicago FADS Competition Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <!-- Firebase -->
+<script>
+  // Immediately restore login state before anything renders to prevent flash
+  (function() {
+    try {
+      const saved = localStorage.getItem('currentUser');
+      if (saved) {
+        // Hide login page immediately — full restore happens after Firebase loads
+        document.addEventListener('DOMContentLoaded', function() {
+          const lp = document.getElementById('loginPage');
+          if (lp) lp.style.display = 'none';
+        });
+      }
+    } catch(e) {}
+  })();
+</script>
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js';
   import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js';
@@ -1032,7 +1047,7 @@ async function loadState() {
 
   // Restore login session if user previously logged in
   try {
-    const saved = sessionStorage.getItem('currentUser');
+    const saved = localStorage.getItem('currentUser');
     if (saved) {
       currentUser = JSON.parse(saved);
       document.getElementById('loginPage').style.display = 'none';
@@ -1045,7 +1060,7 @@ async function loadState() {
         showStudioView(currentUser.name);
       }
     }
-  } catch(e) {}
+  } catch(e) { console.error('Session restore error:', e); }
 }
 
 async function saveState() {
@@ -1134,7 +1149,7 @@ function doLogin() {
     : { type: 'studio', name: studio };
 
   // Persist login across refreshes
-  sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+  localStorage.setItem('currentUser', JSON.stringify(currentUser));
 
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('appHeader').style.display = 'flex';
@@ -1154,7 +1169,7 @@ document.addEventListener('keydown', e => {
 
 function doLogout() {
   currentUser = null;
-  sessionStorage.removeItem('currentUser');
+  localStorage.removeItem('currentUser');
   document.getElementById('loginPage').style.display = 'flex';
   document.getElementById('appHeader').style.display = 'none';
   document.getElementById('appMain').style.display = 'none';
@@ -1434,7 +1449,9 @@ function renderCompEntriesTable(saved) {
   const divisions = getDivisionsForComp(currentComp);
   const tbody = document.getElementById('compEntriesBody');
   tbody.innerHTML = '';
-  divisions.forEach((div, i) => {
+  divisions.forEach((div) => {
+    // Always use the original index in COMP_DIVISIONS to keep compEntries aligned
+    const i = COMP_DIVISIONS.indexOf(div);
     const s = saved[i] || {};
     const vipQty = s.vipQty || 0;
     const alcQty = s.alcQty || 0;
@@ -1460,7 +1477,7 @@ function updateCompEntry(idx, field, value) {
   const d = getStudioData(currentStudio, currentComp);
   if (!d.compEntries[idx]) d.compEntries[idx] = {};
   d.compEntries[idx][field] = value;
-  // refresh row display
+  // refresh row display using original COMP_DIVISIONS index
   const div = COMP_DIVISIONS[idx];
   const vipQty = d.compEntries[idx].vipQty || 0;
   const alcQty = d.compEntries[idx].alcQty || 0;
@@ -1475,8 +1492,10 @@ function updateCompEntry(idx, field, value) {
 
 function updateCompEntriesTotals() {
   const d = getStudioData(currentStudio, currentComp);
+  const divisions = getDivisionsForComp(currentComp);
   let vipSum = 0, alcSum = 0;
-  COMP_DIVISIONS.forEach((div, i) => {
+  divisions.forEach((div) => {
+    const i = COMP_DIVISIONS.indexOf(div);
     const s = d.compEntries[i] || {};
     vipSum += (s.vipQty||0) * div.vip;
     alcSum += (s.alcQty||0) * div.alc;
@@ -1578,6 +1597,7 @@ function removeRow(section, index) {
   if (section === 'vip') renderVipTable(d.vip);
   if (section === 'tickets') renderTicketsTable(d.tickets);
   if (section === 'meals') renderMealsTable(d.meals);
+  triggerAutoSave();
 }
 
 // ── SAVE ──
@@ -1592,8 +1612,10 @@ async function saveAll() {
   await saveState();
 }
 
-function calcCompEntriesTotal(compEntries) {
-  return COMP_DIVISIONS.reduce((sum, div, i) => {
+function calcCompEntriesTotal(compEntries, comp) {
+  const divisions = comp ? getDivisionsForComp(comp) : COMP_DIVISIONS;
+  return divisions.reduce((sum, div) => {
+    const i = COMP_DIVISIONS.indexOf(div);
     const s = compEntries[i] || {};
     return sum + (s.vipQty||0)*div.vip + (s.alcQty||0)*div.alc;
   }, 0);
@@ -1620,7 +1642,7 @@ function renderStudioSummary() {
   const totalPeople = vipCount + alcPeople;
 
   // Entry counts
-  const entryRev   = calcCompEntriesTotal(d.compEntries);
+  const entryRev   = calcCompEntriesTotal(d.compEntries, currentComp);
   const totalVipEntries = COMP_DIVISIONS.reduce((s,_,i) => s + ((d.compEntries[i]||{}).vipQty||0), 0);
   const totalAlcEntries = COMP_DIVISIONS.reduce((s,_,i) => s + ((d.compEntries[i]||{}).alcQty||0), 0);
 
@@ -1771,14 +1793,15 @@ function getCompData(comp) {
     const vipCount = d.vip.filter(r=>r.name).length;
     const vipRev = vipCount * 695;
     const ticketRev = d.tickets.reduce((sum,r)=>sum+calcTicketFee(r),0);
-    const entryRev = calcCompEntriesTotal(d.compEntries);
+    const entryRev = calcCompEntriesTotal(d.compEntries, comp);
     const mealRev = d.meals.reduce((sum,r)=>sum+calcMealFee(r),0);
     const ticketHolders = d.tickets.filter(r=>r.name).length;
     const mealPkgs = d.meals.filter(r=>r.name).length;
     // VIPs get welcome gift + all meals automatically
     const welcomeGifts = d.tickets.filter(r=>r.gift).length + vipCount;
     const totalMealPkgs = mealPkgs + vipCount; // VIPs count as meal packages too
-    const totalEntries = COMP_DIVISIONS.reduce((sum,_,i)=>{
+    const totalEntries = getDivisionsForComp(comp).reduce((sum, div) => {
+      const i = COMP_DIVISIONS.indexOf(div);
       const e = d.compEntries[i]||{};
       return sum + (e.vipQty||0) + (e.alcQty||0);
     }, 0);
@@ -1956,8 +1979,11 @@ function renderMealsTab() {
   const studioRows = allStudios.map(s => {
     const d = getStudioData(s, comp);
     const row = { studio: s };
+    const vipCount = d.vip.filter(r=>r.name).length;
     mealKeys.forEach(m => {
-      const count = d.meals.filter(r=>r[m.key]).length;
+      // VIPs get all meals included in their package
+      const alcCount = d.meals.filter(r=>r[m.key]).length;
+      const count = alcCount + vipCount;
       mealTotals[m.label] += count;
       row[m.label] = count;
     });
@@ -1965,13 +1991,14 @@ function renderMealsTab() {
     totalKids += kids;
     row['Kids'] = kids;
     Object.keys(sessionTotals).forEach(k => sessionTotals[k] += d.tickets.filter(r=>r[k]).length);
-    // dinner choices
+    // dinner choices — ALC meals
     d.meals.filter(r=>r.satCocktail).forEach(r => {
       const ch = r.childrenMeal ? 'Kids Meal' : (r.satMealChoice||'');
       if (ch && dinnerChoiceTotals[ch] !== undefined) dinnerChoiceTotals[ch]++;
     });
-    d.vip.filter(r=>r.meal).forEach(r => {
-      if (dinnerChoiceTotals[r.meal] !== undefined) dinnerChoiceTotals[r.meal]++;
+    // dinner choices — VIPs
+    d.vip.filter(r=>r.name).forEach(r => {
+      if (r.meal && dinnerChoiceTotals[r.meal] !== undefined) dinnerChoiceTotals[r.meal]++;
     });
     return row;
   });
@@ -2050,7 +2077,7 @@ function renderCompareTab() {
       const d = getStudioData(s, c);
       const vipR = d.vip.filter(r=>r.name).length * 695;
       const tickR = d.tickets.reduce((sum,r)=>sum+calcTicketFee(r),0);
-      const entR = calcCompEntriesTotal(d.compEntries);
+      const entR = calcCompEntriesTotal(d.compEntries, c);
       const mealR = d.meals.reduce((sum,r)=>sum+calcMealFee(r),0);
       return vipR+tickR+entR+mealR;
     });
@@ -2089,6 +2116,7 @@ function renderAdminTab() {
 
   // One-time data imports
   const oneTimeImports = [
+    { label: 'Load Clearwater — Chicago Open 2026',       fn: 'loadClearwaterData' },
     { label: 'Load Long Grove — Chicago Open 2026',       fn: 'loadLongGroveData' },
     { label: 'Load Brookfield — Chicago Open 2026',       fn: 'loadBrookfieldData' },
     { label: 'Load Burr Ridge — Chicago Open 2026',       fn: 'loadBurrRidgeData' },
@@ -2096,9 +2124,12 @@ function renderAdminTab() {
     { label: 'Load Fort Wayne North — Chicago Open 2026', fn: 'loadFortWayneNorthData' },
     { label: 'Load Fort Wayne South — Chicago Open 2026', fn: 'loadFortWayneSouthData' },
     { label: 'Load Glen Ellyn — Chicago Open 2026',       fn: 'loadGlenEllynData' },
+    { label: 'Load Green Bay South — Chicago Open 2026',  fn: 'loadGreenBaySouthData' },
     { label: 'Load Lakeview — Chicago Open 2026',         fn: 'loadLakeviewData' },
     { label: 'Load Greenfield — Chicago Open 2026',       fn: 'loadGreenfieldData' },
     { label: 'Load Las Sendas — Chicago Open 2026',       fn: 'loadLasSendasData' },
+    { label: 'Load Madison West — Chicago Open 2026',     fn: 'loadMadisonWestData' },
+    { label: 'Load Menomonee Falls — Chicago Open 2026',  fn: 'loadMenomoneeFallsData' },
     { label: 'Load Milwaukee — Chicago Open 2026',        fn: 'loadMilwaukeeData' },
     { label: 'Load Mokena — Chicago Open 2026',           fn: 'loadMokenaData' },
     { label: 'Load Northbrook — Chicago Open 2026',       fn: 'loadNorthbrookData' },
@@ -2481,7 +2512,7 @@ async function renderVisitingTab() {
       const ticketCount = d.tickets.filter(r=>r.name).length;
       const mealCount = d.meals.filter(r=>r.name).length;
       const total = vipCount*695 + d.tickets.reduce((s,r)=>s+calcTicketFee(r),0) +
-                    calcCompEntriesTotal(d.compEntries) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+                    calcCompEntriesTotal(d.compEntries, comp) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
       const payments = await loadPayments(name, comp);
       const totalPaid = payments.reduce((s,p)=>s+p.amount,0);
       const balance = total - totalPaid;
@@ -2542,7 +2573,7 @@ async function renderVisitingTab() {
     for (const name of visiting) {
       const d = getStudioData(name, comp);
       const t = d.vip.filter(r=>r.name).length*695 + d.tickets.reduce((s,r)=>s+calcTicketFee(r),0) +
-                calcCompEntriesTotal(d.compEntries) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+                calcCompEntriesTotal(d.compEntries, comp) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
       const pmts = await loadPayments(name, comp);
       const paid = pmts.reduce((s,p)=>s+p.amount,0);
       vtotalOwed += t; vtotalPaid += paid;
@@ -2743,7 +2774,7 @@ function generateRegistrationPDF(studio, comp) {
 
   const vipRev    = vipCount * 695;
   const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
-  const entryRev  = calcCompEntriesTotal(d.compEntries);
+  const entryRev  = calcCompEntriesTotal(d.compEntries, comp);
   const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
   const grandTotal = vipRev + ticketRev + entryRev + mealRev;
   const totalGifts = vipCount + d.tickets.filter(r=>r.gift).length;
@@ -3069,15 +3100,16 @@ async function renderPaymentsTable() {
 
   let html = `<table class="data-table" style="margin-top:0.5rem">
     <thead><tr>
-      <th>Studio</th><th>Competition</th><th>Total Owed</th><th>Total Paid</th><th>Balance</th><th>Payments</th>
+      <th>Studio</th><th>Competition</th><th>Total Owed</th><th>Paid / Credits</th><th>Balance</th><th>Payments</th>
     </tr></thead><tbody>`;
 
-  for (const studio of appState.studios) {
-    for (const comp of appState.competitions) {
+  for (const comp of appState.competitions) {
+    const allStudios = getAllStudiosForComp(comp);
+    for (const studio of allStudios) {
       const d = getStudioData(studio, comp);
       const vipRev    = d.vip.filter(r=>r.name).length * 695;
       const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
-      const entryRev  = calcCompEntriesTotal(d.compEntries);
+      const entryRev  = calcCompEntriesTotal(d.compEntries, comp);
       const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
       const totalOwed = vipRev + ticketRev + entryRev + mealRev;
 
@@ -3088,16 +3120,22 @@ async function renderPaymentsTable() {
       if (totalOwed === 0 && payments.length === 0) continue;
 
       const paymentDetails = payments.length
-        ? payments.map((p,i)=>`<span style="font-size:0.6rem;color:var(--muted)">$${p.amount.toFixed(2)}${p.note?' ('+p.note+')':''} ${p.date} <button onclick="deletePayment('${studio}','${comp}',${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem">✕</button></span>`).join('<br>')
+        ? payments.map((p,i) => {
+            const isCredit = p.amount < 0;
+            const display = isCredit
+              ? `<span style="color:var(--gold)">Credit $${Math.abs(p.amount).toFixed(2)}</span>`
+              : `$${p.amount.toFixed(2)}`;
+            return `<span style="font-size:0.6rem;color:var(--muted)">${display}${p.note?' ('+p.note+')':''} ${p.date} <button onclick="deletePayment('${studio}','${comp}',${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem">✕</button></span>`;
+          }).join('<br>')
         : '<span style="color:var(--muted);font-size:0.6rem">No payments logged</span>';
 
       html += `<tr>
         <td style="color:var(--gold-light);font-family:'Cormorant Garamond',serif">${studio}</td>
         <td style="font-size:0.65rem;color:var(--muted)">${comp}</td>
-        <td>$${Math.round(totalOwed).toLocaleString()}</td>
+        <td>$${totalOwed.toFixed(2)}</td>
         <td style="color:var(--green)">$${totalPaid.toFixed(2)}</td>
-        <td style="color:${balance>0?'var(--red)':balance<0?'var(--gold)':'var(--green)'};font-weight:500">
-          $${Math.abs(balance).toFixed(2)}${balance<0?' (overpaid)':balance===0?' ✓':''}
+        <td style="color:${balance>0.005?'var(--red)':balance<-0.005?'var(--gold)':'var(--green)'};font-weight:500">
+          $${Math.abs(balance).toFixed(2)}${balance<-0.005?' (overpaid)':balance<0.005?' ✓':''}
         </td>
         <td>${paymentDetails}</td>
       </tr>`;
@@ -4383,6 +4421,162 @@ async function loadWilmetteData() {
   await fbSet('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Wilmette loaded! 3 VIPs (Mary Josephs, Michelle Mealing, Rafael Torres), 3 ALC (Ellie Homan, Karen Reyes, Jake Thomas), 249 entries, $14,140 total.');
+  renderAdminTab(); renderPaymentsTable();
+}
+
+// ─── CLEARWATER ───
+async function loadClearwaterData() {
+  if (!confirm('Replace all Clearwater data for Chicago Open 2026?')) return;
+  const studio = 'Clearwater'; const comp = 'Chicago Open 2026';
+  const key = studio + '::' + comp;
+  if (!appState.visitingStudios) appState.visitingStudios = [];
+  if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
+    appState.visitingStudios.push({ name:studio, comp });
+    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+  }
+  const data = {
+    vip: [
+      { name:'Trevia Buckner',   proam:'Amateur',      meal:'', allergy:'' },
+      { name:'Annie Kellermann', proam:'Amateur',      meal:'', allergy:'' },
+      { name:'Aaron Sanchez',    proam:'Professional', meal:'', allergy:'' },
+      { name:'Jose Sanchez',     proam:'Professional', meal:'', allergy:'' },
+    ],
+    tickets: [], meals: [],
+    compEntries: Array(15).fill({}).map(()=>({vipQty:0,alcQty:0}))
+  };
+  // 82 entries = $3,340 — verified. All VIP pros → VIP rate @$39
+  // Singles: Buckner/Aaron(30) + Kellermann/Aaron(19) + Kellermann/Jose(31) = 80 vip
+  data.compEntries[0] = { vipQty:80, alcQty:0 };  // Pro/Am Single @$39vip
+  // Champ 3-dance: Buckner/Aaron L-B RS Smooth (W/T/FT) = 1 vip @$105
+  data.compEntries[4] = { vipQty:1,  alcQty:0 };  // Champ 3-dance (Buckner/Aaron RS Open)
+  // Champ 4-dance: Buckner/Aaron L-B #49 Smooth Open Champ (W/T/FT/VW) = 1 vip @$115
+  data.compEntries[5] = { vipQty:1,  alcQty:0 };  // Champ 4-dance (Buckner/Aaron #49)
+  appState.data[key] = data;
+  await fbSet('studioData::' + key, JSON.stringify(data));
+  showSaveBanner();
+  alert('✓ Clearwater loaded! 4 VIPs, 0 ALC, 82 entries, $6,120 total.');
+  renderAdminTab(); renderPaymentsTable();
+}
+
+// ─── GREEN BAY SOUTH ───
+async function loadGreenBaySouthData() {
+  if (!confirm('Replace all Green Bay South data for Chicago Open 2026?')) return;
+  const studio = 'Green Bay South'; const comp = 'Chicago Open 2026';
+  const key = studio + '::' + comp;
+  if (!appState.visitingStudios) appState.visitingStudios = [];
+  if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
+    appState.visitingStudios.push({ name:studio, comp });
+    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+  }
+  const data = {
+    vip: [],
+    tickets: [
+      // King: ALC pro, all sessions + meals, no compFee (not in purchases)
+      { name:'Daniel King',       proam:'Professional', thuMat:false, thuEve:false, friMat:false, friEve:true,  satMat:true,  gift:false, compFee:false, vipAlc:'ALC' },
+      // VanRossum: ALC amateur, compFee, gift, same sessions + meals
+      { name:'Shelby VanRossum', proam:'Amateur',      thuMat:false, thuEve:false, friMat:false, friEve:true,  satMat:true,  gift:true,  compFee:true,  vipAlc:'ALC' },
+    ],
+    meals: [
+      { name:'Daniel King',       proam:'Professional', thuDinner:false, friBrk:false, friLunch:false, friDinner:true,  satBrk:true, satLunch:true,  satCocktail:true,  satMealChoice:'', allergy:'', childrenMeal:false },
+      { name:'Shelby VanRossum', proam:'Amateur',      thuDinner:false, friBrk:false, friLunch:false, friDinner:true,  satBrk:true, satLunch:true,  satCocktail:true,  satMealChoice:'', allergy:'', childrenMeal:false },
+    ],
+    compEntries: Array(15).fill({}).map(()=>({vipQty:0,alcQty:0}))
+  };
+  // 56 entries = $2,352 — verified. King=ALC pro → all ALC @$42. No champs.
+  data.compEntries[0] = { vipQty:0, alcQty:56 }; // Pro/Am Single @$42alc
+  appState.data[key] = data;
+  await fbSet('studioData::' + key, JSON.stringify(data));
+  showSaveBanner();
+  alert('✓ Green Bay South loaded! 0 VIPs, 2 ALC (King, VanRossum), 56 entries, $3,307 total.');
+  renderAdminTab(); renderPaymentsTable();
+}
+
+// ─── MADISON WEST ───
+async function loadMadisonWestData() {
+  if (!confirm('Replace all Madison West data for Chicago Open 2026?')) return;
+  const studio = 'Madison West'; const comp = 'Chicago Open 2026';
+  const key = studio + '::' + comp;
+  if (!appState.visitingStudios) appState.visitingStudios = [];
+  if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
+    appState.visitingStudios.push({ name:studio, comp });
+    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+  }
+  const data = {
+    vip: [
+      { name:'Bogdan Kremenchutskyi',    proam:'Professional', meal:'', allergy:'' },
+      { name:'Oleksandr Kremenchutskyi', proam:'Professional', meal:'', allergy:'' },
+      { name:'Lisa Sagun',               proam:'Amateur',      meal:'', allergy:'' },
+    ],
+    tickets: [
+      // Babenko: no package, no purchases listed, 1 pro-closed entry only
+      { name:'Alexandra Babenko', proam:'Amateur', thuMat:false, thuEve:false, friMat:false, friEve:false, satMat:false, gift:false, compFee:false, vipAlc:'ALC' },
+    ],
+    meals: [],
+    compEntries: Array(15).fill({}).map(()=>({vipQty:0,alcQty:0}))
+  };
+  // 211 entries = $8,814 — verified. Both pros VIP → VIP rate @$39
+  // Singles: Sagun/Bogdan(102) + Sagun/Oleksandr(99) = 201 vip @$39
+  data.compEntries[0]  = { vipQty:201, alcQty:0 }; // Pro/Am Single @$39vip
+  // Champ 2-dance [3] @$95vip: #66N Nightclub Newcomer (H/WC)
+  //   Sagun/Bogdan(1) + Sagun/Oleksandr(2) = 3 vip
+  data.compEntries[3]  = { vipQty:3,   alcQty:0 }; // Champ 2-dance (Nightclub #66N)
+  // Champ 3-dance [4] @$105vip: #59 Smooth Newcomers (W/T/F) + #60 Rhythm Newcomers (CC/R/SW)
+  //   Sagun/Bogdan #60(3) + Sagun/Oleksandr #59(3) = 6 vip
+  data.compEntries[4]  = { vipQty:6,   alcQty:0 }; // Champ 3-dance (Newcomers champs)
+  // Pro Open [14] @$60: Oleksandr/Babenko #106 Open Amer. Smooth = 1
+  data.compEntries[14] = { vipQty:1,   alcQty:0 }; // Pro Open @$60 (Oleksandr/Babenko #106)
+  appState.data[key] = data;
+  await fbSet('studioData::' + key, JSON.stringify(data));
+  showSaveBanner();
+  alert('✓ Madison West loaded! 3 VIPs, 1 ALC (Babenko), 211 entries, $10,899 total.');
+  renderAdminTab(); renderPaymentsTable();
+}
+
+// ─── MENOMONEE FALLS ───
+async function loadMenomoneeFallsData() {
+  if (!confirm('Replace all Menomonee Falls data for Chicago Open 2026?')) return;
+  const studio = 'Menomonee Falls'; const comp = 'Chicago Open 2026';
+  const key = studio + '::' + comp;
+  if (!appState.visitingStudios) appState.visitingStudios = [];
+  if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
+    appState.visitingStudios.push({ name:studio, comp });
+    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+  }
+  const data = {
+    vip: [],
+    tickets: [
+      // Bieschke: ALC amateur, compFee, friMat, satMat, friBrk, friLunch, gift
+      { name:'Dr. Janet Bieschke', proam:'Amateur',      thuMat:false, thuEve:false, friMat:true,  friEve:false, satMat:true,  gift:true,  compFee:true,  vipAlc:'ALC' },
+      // Cadd: ALC amateur, compFee, satMat, satBrk, satLunch, gift
+      { name:'Carolyn Cadd',       proam:'Amateur',      thuMat:false, thuEve:false, friMat:false, friEve:false, satMat:true,  gift:true,  compFee:true,  vipAlc:'ALC' },
+      // Modrzynski: ALC pro, friMat, friEve, satMat
+      { name:'Shem Modrzynski',    proam:'Professional', thuMat:false, thuEve:false, friMat:true,  friEve:true,  satMat:true,  gift:false, compFee:false, vipAlc:'ALC' },
+      // Nieman: ALC amateur, compFee, friEve, satMat, gift
+      { name:'Kathy Nieman',       proam:'Amateur',      thuMat:false, thuEve:false, friMat:false, friEve:true,  satMat:true,  gift:true,  compFee:true,  vipAlc:'ALC' },
+    ],
+    meals: [
+      { name:'Dr. Janet Bieschke', proam:'Amateur',      thuDinner:false, friBrk:true,  friLunch:true,  friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false },
+      { name:'Carolyn Cadd',       proam:'Amateur',      thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:true,  satLunch:true,  satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false },
+      { name:'Shem Modrzynski',    proam:'Professional', thuDinner:false, friBrk:false, friLunch:false, friDinner:true,  satBrk:true,  satLunch:true,  satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false },
+      { name:'Kathy Nieman',       proam:'Amateur',      thuDinner:false, friBrk:false, friLunch:false, friDinner:true,  satBrk:true,  satLunch:true,  satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false },
+    ],
+    compEntries: Array(15).fill({}).map(()=>({vipQty:0,alcQty:0}))
+  };
+  // 197 entries = $8,943 — verified. Shem = ALC pro → all ALC @$42
+  // Singles: Bieschke/Shem(71) + Cadd/Shem(40) + Nieman/Shem(77) = 188 alc
+  data.compEntries[0] = { vipQty:0,  alcQty:188 }; // Pro/Am Single @$42alc
+  // Champ 3-dance [4] @$108alc: Bieschke #43(1)+#44(1) + Cadd #46(1) + Nieman #46(1) = 4
+  data.compEntries[4] = { vipQty:0,  alcQty:4   }; // Champ 3-dance (smooth/rhythm silver/bronze)
+  // Champ 4-dance [5] @$118alc: Bieschke #49 Smooth Open Champ (W/T/FT/VW) = 1
+  data.compEntries[5] = { vipQty:0,  alcQty:1   }; // Champ 4-dance (Bieschke #49)
+  // Champ 5-dance [6] @$128alc: Bieschke #50(1) + Cadd #50(1) + Nieman #50(1) = 3
+  data.compEntries[6] = { vipQty:0,  alcQty:3   }; // Champ 5-dance (#50 Rhythm Open Champ)
+  // Solo [7] @$113alc: Nieman #72S Silver Solo "Let Me Be Your Star" = 1
+  data.compEntries[7] = { vipQty:0,  alcQty:1   }; // Solo (Nieman #72S)
+  appState.data[key] = data;
+  await fbSet('studioData::' + key, JSON.stringify(data));
+  showSaveBanner();
+  alert('✓ Menomonee Falls loaded! 0 VIPs, 4 ALC (Bieschke, Cadd, Modrzynski, Nieman), 197 entries, $10,332 total.');
   renderAdminTab(); renderPaymentsTable();
 }
 
