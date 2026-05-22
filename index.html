@@ -919,6 +919,7 @@
       <button class="tab" onclick="switchOrgTab('documents')">Documents</button>
       <button class="tab" onclick="switchOrgTab('compare')">Compare Comps</button>
       <button class="tab" onclick="switchOrgTab('admin')">Admin</button>
+      <button class="tab" onclick="switchOrgTab('checks')">🏆 Checks</button>
       <button class="tab" onclick="switchOrgTab('manage')">✏️ Manage Studio</button>
     </div>
 
@@ -949,6 +950,10 @@
 
     <div class="tab-content" id="org-tab-compare">
       <div id="compareContent"></div>
+    </div>
+
+    <div class="tab-content" id="org-tab-checks">
+      <div id="checksContent"></div>
     </div>
 
     <div class="tab-content" id="org-tab-admin">
@@ -1225,6 +1230,7 @@ function switchOrgTab(name) {
   if (name === 'documents') renderOrgDocuments();
   if (name === 'compare') renderCompareTab();
   if (name === 'admin') { renderAdminTab(); renderPaymentsTable(); }
+  if (name === 'checks') renderChecksTab();
   if (name === 'manage') {
     // Populate studio dropdown with all studios + visiting studios for current comp
     const comp = document.getElementById('orgCompSelect').value || getDefaultComp();
@@ -2142,11 +2148,15 @@ function renderStudiosTab() {
         <span class="val" style="color:var(--gold)">$${Math.round(d.total).toLocaleString()}</span>
       </div>
       <button class="btn btn-sm" style="width:100%;margin-top:0.75rem;background:var(--gold);color:var(--black)" onclick="generateRegistrationPDF('${d.studio}','${comp}')">📄 Registration PDF</button>
+      <button class="btn btn-sm btn-outline" style="width:100%;margin-top:0.4rem;font-size:0.65rem" onclick="generateStudioSummaryPDF('${d.studio}','${comp}')">📋 Studio Summary</button>
       <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
         <button class="btn btn-sm" style="flex:1;margin-top:0;background:var(--dark);color:#fff;font-size:0.55rem" onclick="printDinnerLabels('${comp}','${d.studio}')">🍽️ Dinner Labels</button>
         <button class="btn btn-sm btn-outline" style="flex:1;margin-top:0;font-size:0.55rem" onclick="printRegistrationLabels('${comp}','${d.studio}')">🏷️ Reg Labels</button>
       </div>
     </div>`).join('')}
+  </div>
+  <div style="text-align:center;margin-top:1.5rem">
+    <button class="btn" style="width:auto;background:var(--gold);color:var(--black)" onclick="generateCheckinSheetPDF('${comp}')">📋 Print Full Check-In Sheet — All Studios</button>
   </div>`;
 }
 
@@ -2260,28 +2270,67 @@ function renderMealsTab() {
 
 function renderCompareTab() {
   const comps = appState.competitions;
-  const studios = appState.studios; // home studios only for cross-comp comparison
-
   const el = document.getElementById('compareContent');
   if (comps.length < 2) {
     el.innerHTML = `<div class="no-data">Add more competitions in Admin to compare across events.</div>`;
     return;
   }
 
-  const rows = studios.map(s => {
+  // Revenue rows — home studios only for cross-comp
+  const studios = appState.studios;
+  const revenueRows = studios.map(s => {
     const totals = comps.map(c => {
       const d = getStudioData(s, c);
-      const vipR = d.vip.filter(r=>r.name).length * 695;
+      const vipR  = d.vip.filter(r=>r.name).length * 695;
       const tickR = d.tickets.reduce((sum,r)=>sum+calcTicketFee(r),0);
-      const entR = calcCompEntriesTotal(d.compEntries, c, d.entryOverride);
+      const entR  = calcCompEntriesTotal(d.compEntries, c, d.entryOverride);
       const mealR = d.meals.reduce((sum,r)=>sum+calcMealFee(r),0);
       return vipR+tickR+entR+mealR;
     });
     return { studio:s, totals };
   });
 
+  // Meal totals per competition — all studios
+  const mealKeys = [
+    { key:'thuDinner',   label:'Thu Dinner' },
+    { key:'friBrk',      label:'Fri Breakfast' },
+    { key:'friLunch',    label:'Fri Lunch' },
+    { key:'friDinner',   label:'Fri Dinner' },
+    { key:'satBrk',      label:'Sat Breakfast' },
+    { key:'satLunch',    label:'Sat Lunch' },
+    { key:'satCocktail', label:'Sat Banquet' },
+  ];
+
+  const mealRows = mealKeys.map(mk => {
+    const counts = comps.map(c => {
+      const allStudios = getAllStudiosForComp(c);
+      return allStudios.reduce((sum, s) => {
+        const d = getStudioData(s, c);
+        const vipCount = d.vip.filter(r=>r.name).length;
+        const alcCount = d.meals.filter(r=>r[mk.key]).length;
+        return sum + alcCount + vipCount;
+      }, 0);
+    });
+    return { label: mk.label, counts };
+  });
+
+  // Sat banquet dinner choice breakdown per competition
+  const choiceKeys = ['Beef','Fish','Chicken','Vegetarian'];
+  const choiceRows = choiceKeys.map(choice => {
+    const counts = comps.map(c => {
+      const allStudios = getAllStudiosForComp(c);
+      return allStudios.reduce((sum, s) => {
+        const d = getStudioData(s, c);
+        const alcChoices = d.meals.filter(r=>r.satCocktail && r.satMealChoice===choice).length;
+        const vipChoices = d.vip.filter(r=>r.name && r.meal===choice).length;
+        return sum + alcChoices + vipChoices;
+      }, 0);
+    });
+    return { label: choice, counts };
+  });
+
   el.innerHTML = `
-    <div class="section-card fade-up">
+    <div class="section-card fade-up" style="margin-bottom:1.5rem">
       <div class="section-header"><div class="section-title">Revenue Comparison Across Competitions</div></div>
       <div class="section-body comp-table-wrap">
         <table class="data-table">
@@ -2290,14 +2339,54 @@ function renderCompareTab() {
             ${comps.map(c=>`<th>${c}</th>`).join('')}
           </tr></thead>
           <tbody>
-            ${rows.map(r=>`<tr>
+            ${revenueRows.map(r=>`<tr>
               <td style="color:var(--gold-light);font-family:'Cormorant Garamond',serif">${r.studio}</td>
               ${r.totals.map(t=>`<td>$${Math.round(t).toLocaleString()}</td>`).join('')}
             </tr>`).join('')}
           </tbody>
           <tfoot><tr class="total-row">
             <td>ALL STUDIOS</td>
-            ${comps.map((_,ci)=>`<td>$${Math.round(rows.reduce((s,r)=>s+r.totals[ci],0)).toLocaleString()}</td>`).join('')}
+            ${comps.map((_,ci)=>`<td>$${Math.round(revenueRows.reduce((s,r)=>s+r.totals[ci],0)).toLocaleString()}</td>`).join('')}
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="section-card fade-up" style="margin-bottom:1.5rem">
+      <div class="section-header"><div class="section-title">🍽️ Meal Counts Across Competitions</div></div>
+      <div class="section-body comp-table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Meal</th>
+            ${comps.map(c=>`<th>${c}</th>`).join('')}
+          </tr></thead>
+          <tbody>
+            ${mealRows.map(r=>`<tr>
+              <td style="color:var(--text)">${r.label}</td>
+              ${r.counts.map(n=>`<td>${n}</td>`).join('')}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section-card fade-up">
+      <div class="section-header"><div class="section-title">🥩 Sat Banquet Dinner Choices Across Competitions</div></div>
+      <div class="section-body comp-table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Choice</th>
+            ${comps.map(c=>`<th>${c}</th>`).join('')}
+          </tr></thead>
+          <tbody>
+            ${choiceRows.map(r=>`<tr>
+              <td style="color:var(--text)">${r.label}</td>
+              ${r.counts.map(n=>`<td>${n}</td>`).join('')}
+            </tr>`).join('')}
+          </tbody>
+          <tfoot><tr class="total-row">
+            <td>TOTAL BANQUET</td>
+            ${comps.map((_,ci)=>`<td>${choiceRows.reduce((s,r)=>s+r.counts[ci],0)}</td>`).join('')}
           </tr></tfoot>
         </table>
       </div>
@@ -2765,6 +2854,7 @@ async function renderVisitingTab() {
             <button class="btn btn-sm" style="width:auto;margin-top:0;flex:1;background:var(--gold);color:var(--black)" onclick="generateRegistrationPDF('${safeName}','${comp}')">PDF</button>
           </div>
           <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+            <button class="btn btn-sm btn-outline" style="flex:1;margin-top:0;font-size:0.55rem" onclick="generateStudioSummaryPDF('${safeName}','${comp}')">📋 Summary</button>
             <button class="btn btn-sm" style="flex:1;margin-top:0;background:var(--dark);color:#fff;font-size:0.55rem" onclick="printDinnerLabels('${comp}','${safeName}')">🍽️ Dinner Labels</button>
             <button class="btn btn-sm btn-outline" style="flex:1;margin-top:0;font-size:0.55rem" onclick="printRegistrationLabels('${comp}','${safeName}')">🏷️ Reg Labels</button>
           </div>
@@ -4872,6 +4962,602 @@ async function generateStatusSummaryPDF() {
       </table>`}
 
   <div class="footer">Chicago Open 2026 &nbsp;·&nbsp; Fred Astaire Dance Studios &nbsp;·&nbsp; Printed ${today}</div>
+  <script>setTimeout(()=>window.print(),400);<\/script>
+</body></html>`);
+  w.document.close();
+}
+
+// ─── CHECKS & ENVELOPES ───
+
+const CHECKS_KEY = 'checksData::Chicago Open 2026';
+
+const DEFAULT_CHECKS = {
+  crew: [
+    { role:'Judge',                legalName:'Driton Dovolani',        checkTo:'',                         checkNum:'', amount:'' },
+    { role:'Judge',                legalName:'Stephen Knight',         checkTo:'',                         checkNum:'', amount:'' },
+    { role:'Judge',                legalName:'Ronald Guillen',         checkTo:'',                         checkNum:'', amount:'' },
+    { role:'Judge',                legalName:'Katie Guillen',          checkTo:'',                         checkNum:'', amount:'' },
+    { role:'Judge',                legalName:'Jack Davy',              checkTo:'',                         checkNum:'', amount:'' },
+    { role:'Judge',                legalName:'Elizabeth Joy',          checkTo:'',                         checkNum:'', amount:'' },
+    { role:'Judge',                legalName:'Hayk Arshakian',         checkTo:'',                         checkNum:'', amount:'' },
+    { role:'MC',                   legalName:'Stephen Heroux',         checkTo:'Marks & Mic Consulting, LLC', checkNum:'', amount:'' },
+    { role:'Registrar/Scrutineer', legalName:'Melanie Champ Heroux',   checkTo:'Marks & Mic Consulting, LLC', checkNum:'', amount:'' },
+    { role:'DJ',                   legalName:'Jason Vaspelec',         checkTo:'',                         checkNum:'', amount:'' },
+    { role:'Comp Coordinator',     legalName:'Jackie Josephs',         checkTo:'JJ DANCE LLC',             checkNum:'', amount:'' },
+    { role:'Comp Coordinator',     legalName:'Rikki Bendinelli',       checkTo:'',                         checkNum:'', amount:'' },
+    { role:'Social Media',         legalName:'Alex Casper',            checkTo:'',                         checkNum:'', amount:'' },
+    { role:'Comp Crew',            legalName:'Phoebe Albert',          checkTo:'Phoebe Albert',            checkNum:'', amount:'' },
+    { role:'Comp Crew',            legalName:'Ruby Marquez',           checkTo:'Ruby Marquez',             checkNum:'', amount:'' },
+    { role:'Decor',                legalName:'MD Decor',               checkTo:'MD Decor',                 checkNum:'', amount:'' },
+    { role:'Floor',                legalName:'Jeremy Norris',          checkTo:'',                         checkNum:'', amount:'' },
+    { role:'Tips & Gratuity',      legalName:'—',                      checkTo:'',                         checkNum:'', amount:'500' },
+  ],
+  proDivisions: [
+    { division:'Mixed Novice',     place:'1st', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Mixed Novice',     place:'2nd', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Smooth',    place:'1st', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Smooth',    place:'2nd', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Smooth',    place:'3rd', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Smooth',    place:'4th', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Smooth',    place:'5th', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Smooth',    place:'6th', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Rhythm',    place:'1st', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Rhythm',    place:'2nd', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Rhythm',    place:'3rd', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Rhythm',    place:'4th', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Rhythm',    place:'5th', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Rhythm',    place:'6th', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Ballroom',  place:'1st', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Ballroom',  place:'2nd', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Closed Latin',     place:'1st', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Open Smooth',      place:'1st', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Open Smooth',      place:'2nd', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Open Smooth',      place:'3rd', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Open Rhythm',      place:'1st', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Open Rhythm',      place:'2nd', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Open Rhythm',      place:'3rd', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Open Ballroom',    place:'1st', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    { division:'Open Latin',       place:'1st', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+  ],
+  topTeachers: [
+    { category:'Top Nightclub Teacher',         place:'1st - M', name:'', checkNum:'', amount:'400' },
+    { category:'Top Nightclub Teacher',         place:'2nd - M', name:'', checkNum:'', amount:'' },
+    { category:'Top Nightclub Teacher',         place:'3rd - M', name:'', checkNum:'', amount:'' },
+    { category:'Top Int\'l Ballroom Teacher',   place:'1st - M', name:'', checkNum:'', amount:'' },
+    { category:'Top Int\'l Latin Teacher',      place:'1st - M', name:'', checkNum:'', amount:'' },
+    { category:'Top Am. Smooth Teacher',        place:'1st - M', name:'', checkNum:'', amount:'400' },
+    { category:'Top Am. Smooth Teacher',        place:'1st - F', name:'', checkNum:'', amount:'400' },
+    { category:'Top Am. Smooth Teacher',        place:'2nd - M', name:'', checkNum:'', amount:'300' },
+    { category:'Top Am. Smooth Teacher',        place:'2nd - F', name:'', checkNum:'', amount:'300' },
+    { category:'Top Am. Smooth Teacher',        place:'3rd - M', name:'', checkNum:'', amount:'200' },
+    { category:'Top Am. Rhythm Teacher',        place:'1st - M', name:'', checkNum:'', amount:'400' },
+    { category:'Top Am. Rhythm Teacher',        place:'1st - F', name:'', checkNum:'', amount:'400' },
+    { category:'Top Am. Rhythm Teacher',        place:'2nd - M', name:'', checkNum:'', amount:'300' },
+    { category:'Top Am. Rhythm Teacher',        place:'2nd - F', name:'', checkNum:'', amount:'' },
+    { category:'Top Am. Rhythm Teacher',        place:'3rd - M', name:'', checkNum:'', amount:'' },
+    { category:'Top Am. Rhythm Teacher',        place:'3rd - F', name:'', checkNum:'', amount:'' },
+    { category:'Top Overall Teacher',           place:'1st',     name:'', checkNum:'', amount:'' },
+  ],
+  potOfGold: [
+    { name:'Andre Santore',        checkNum:'', amount:'' },
+    { name:'Mikhail Chernavin',    checkNum:'', amount:'' },
+    { name:'Declan Glover',        checkNum:'', amount:'' },
+    { name:'Mykyta Fomenko',       checkNum:'', amount:'' },
+    { name:'Rafael Torres',        checkNum:'', amount:'' },
+    { name:'Kharyton Khomenko',    checkNum:'', amount:'' },
+    { name:'Yelyzaveta Vyshnevska',checkNum:'', amount:'' },
+    { name:'Dumitru Turcan',       checkNum:'', amount:'' },
+    { name:'Ellie Homan',          checkNum:'', amount:'' },
+    { name:'Nick Haklin',          checkNum:'', amount:'' },
+    { name:'Petr Polivka',         checkNum:'', amount:'' },
+    { name:'Iryna DeSoto',         checkNum:'', amount:'' },
+    { name:'Lawrence Davy',        checkNum:'', amount:'' },
+    { name:'Vasylyna Barabash',    checkNum:'', amount:'' },
+    { name:'Nicole Nedelcu',       checkNum:'', amount:'' },
+    { name:'Maria Hartopeanu',     checkNum:'', amount:'' },
+  ]
+};
+
+let checksData = null;
+
+async function loadChecksData() {
+  if (checksData) return checksData;
+  try {
+    const val = await fbGet(CHECKS_KEY);
+    checksData = val ? JSON.parse(val) : JSON.parse(JSON.stringify(DEFAULT_CHECKS));
+  } catch(e) {
+    checksData = JSON.parse(JSON.stringify(DEFAULT_CHECKS));
+  }
+  return checksData;
+}
+
+async function saveChecksData() {
+  await fbSet(CHECKS_KEY, JSON.stringify(checksData));
+  showSaveBanner();
+}
+
+function updateCheck(section, idx, field, val) {
+  checksData[section][idx][field] = val;
+  clearTimeout(window._checksSaveTimer);
+  window._checksSaveTimer = setTimeout(saveChecksData, 1200);
+}
+
+async function renderChecksTab() {
+  const el = document.getElementById('checksContent');
+  el.innerHTML = '<p style="color:var(--muted);font-size:0.8rem;padding:1rem">Loading check data...</p>';
+  const d = await loadChecksData();
+
+  const sectionCard = (title, badge, body) => `
+    <div class="section-card" style="margin-bottom:1.5rem">
+      <div class="section-header">
+        <div class="section-title">${title}</div>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <span class="badge badge-gold">${badge}</span>
+        </div>
+      </div>
+      <div class="section-body" style="overflow-x:auto">${body}</div>
+    </div>`;
+
+  const inp = (val, onchange, placeholder='', w='90px') =>
+    `<input type="text" value="${val||''}" placeholder="${placeholder}" style="width:${w};font-size:0.75rem" onchange="${onchange}"/>`;
+
+  // ── CREW TABLE ──
+  const crewRows = d.crew.map((r,i) => `<tr>
+    <td>${inp(r.role,     `updateCheck('crew',${i},'role',this.value)`,     'Role', '120px')}</td>
+    <td>${inp(r.legalName,`updateCheck('crew',${i},'legalName',this.value)`,'Legal name', '160px')}</td>
+    <td>${inp(r.checkTo,  `updateCheck('crew',${i},'checkTo',this.value)`,  'Make check to…', '180px')}</td>
+    <td>${inp(r.checkNum, `updateCheck('crew',${i},'checkNum',this.value)`, '#', '70px')}</td>
+    <td>${inp(r.amount,   `updateCheck('crew',${i},'amount',this.value)`,   '0.00', '80px')}</td>
+  </tr>`).join('');
+
+  const crewTable = `<table class="data-table">
+    <thead><tr><th>Role</th><th>Legal Name</th><th>Make Check To</th><th>Check #</th><th>Amount $</th></tr></thead>
+    <tbody>${crewRows}</tbody>
+  </table>`;
+
+  // ── PRO DIVISIONS TABLE ──
+  let lastDiv = '';
+  const proRows = d.proDivisions.map((r,i) => `<tr>
+    <td>${inp(r.division, `updateCheck('proDivisions',${i},'division',this.value)`, 'Division', '130px')}</td>
+    <td>${inp(r.place,    `updateCheck('proDivisions',${i},'place',this.value)`,    'Place', '55px')}</td>
+    <td>${inp(r.leaderName,   `updateCheck('proDivisions',${i},'leaderName',this.value)`,   'Leader name', '140px')}</td>
+    <td>${inp(r.leaderCheck,  `updateCheck('proDivisions',${i},'leaderCheck',this.value)`,  '#', '65px')}</td>
+    <td>${inp(r.leaderAmt,    `updateCheck('proDivisions',${i},'leaderAmt',this.value)`,    '0.00', '75px')}</td>
+    <td style="border-left:1px solid var(--border)">${inp(r.followerName, `updateCheck('proDivisions',${i},'followerName',this.value)`, 'Follower name', '140px')}</td>
+    <td>${inp(r.followerCheck,`updateCheck('proDivisions',${i},'followerCheck',this.value)`,'#', '65px')}</td>
+    <td>${inp(r.followerAmt,  `updateCheck('proDivisions',${i},'followerAmt',this.value)`,  '0.00', '75px')}</td>
+  </tr>`).join('');
+
+  const proTable = `<table class="data-table">
+    <thead><tr>
+      <th>Division</th><th>Place</th>
+      <th>Leader Name</th><th>Check #</th><th>Leader $</th>
+      <th style="border-left:1px solid var(--border)">Follower Name</th><th>Check #</th><th>Follower $</th>
+    </tr></thead>
+    <tbody>${proRows}</tbody>
+  </table>`;
+
+  // ── TOP TEACHERS TABLE ──
+  let lastCat = '';
+  const ttRows = d.topTeachers.map((r,i) => `<tr>
+    <td>${inp(r.category, `updateCheck('topTeachers',${i},'category',this.value)`, 'Category', '160px')}</td>
+    <td>${inp(r.place,    `updateCheck('topTeachers',${i},'place',this.value)`,    'Place', '60px')}</td>
+    <td>${inp(r.name,     `updateCheck('topTeachers',${i},'name',this.value)`,     'Name', '160px')}</td>
+    <td>${inp(r.checkNum, `updateCheck('topTeachers',${i},'checkNum',this.value)`, '#', '65px')}</td>
+    <td>${inp(r.amount,   `updateCheck('topTeachers',${i},'amount',this.value)`,   '0.00', '80px')}</td>
+  </tr>`).join('');
+
+  const ttTable = `<table class="data-table">
+    <thead><tr><th>Category</th><th>Place</th><th>Name</th><th>Check #</th><th>Amount $</th></tr></thead>
+    <tbody>${ttRows}</tbody>
+  </table>`;
+
+  // ── POT OF GOLD TABLE ──
+  const pogRows = d.potOfGold.map((r,i) => `<tr>
+    <td>${inp(r.name,     `updateCheck('potOfGold',${i},'name',this.value)`,     'Name', '180px')}</td>
+    <td>${inp(r.checkNum, `updateCheck('potOfGold',${i},'checkNum',this.value)`, '#', '70px')}</td>
+    <td>${inp(r.amount,   `updateCheck('potOfGold',${i},'amount',this.value)`,   '0.00', '80px')}</td>
+  </tr>`).join('');
+
+  const pogTable = `<table class="data-table">
+    <thead><tr><th>Name</th><th>Check #</th><th>Amount $</th></tr></thead>
+    <tbody>${pogRows}</tbody>
+  </table>`;
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap">
+      <button class="btn btn-sm btn-outline" style="width:auto" onclick="printCheckLabels('crew')">🏷️ Print Crew Labels</button>
+      <button class="btn btn-sm btn-outline" style="width:auto" onclick="printCheckLabels('proDivisions')">🏷️ Print Pro Division Labels</button>
+      <button class="btn btn-sm btn-outline" style="width:auto" onclick="printCheckLabels('topTeachers')">🏷️ Print Top Teacher Labels</button>
+      <button class="btn btn-sm btn-outline" style="width:auto" onclick="printCheckLabels('potOfGold')">🏷️ Print Pot of Gold Labels</button>
+      <button class="btn btn-sm" style="width:auto;background:var(--gold);color:var(--black)" onclick="printCheckLabels('all')">🏷️ Print ALL Labels</button>
+    </div>
+    ${sectionCard('👥 Judges & Crew', '1 check per envelope',
+      crewTable + `<button class="btn btn-sm btn-outline" style="width:auto;margin-top:0.75rem" onclick="addCheckRow('crew')">+ Add Row</button>`)}
+    ${sectionCard('🏆 Pro Divisions', '2 checks per envelope',
+      proTable + `<button class="btn btn-sm btn-outline" style="width:auto;margin-top:0.75rem" onclick="addCheckRow('proDivisions')">+ Add Row</button>`)}
+    ${sectionCard('🥇 Top Teachers', '1 check per envelope',
+      ttTable + `<button class="btn btn-sm btn-outline" style="width:auto;margin-top:0.75rem" onclick="addCheckRow('topTeachers')">+ Add Row</button>`)}
+    ${sectionCard('🪙 Pot of Gold', '1 check per envelope',
+      pogTable + `<button class="btn btn-sm btn-outline" style="width:auto;margin-top:0.75rem" onclick="addCheckRow('potOfGold')">+ Add Row</button>`)}
+  `;
+}
+
+function addCheckRow(section) {
+  const blanks = {
+    crew:         { role:'', legalName:'', checkTo:'', checkNum:'', amount:'' },
+    proDivisions: { division:'', place:'', leaderName:'', leaderCheck:'', leaderAmt:'', followerName:'', followerCheck:'', followerAmt:'' },
+    topTeachers:  { category:'', place:'', name:'', checkNum:'', amount:'' },
+    potOfGold:    { name:'', checkNum:'', amount:'' },
+  };
+  checksData[section].push({ ...blanks[section] });
+  saveChecksData();
+  renderChecksTab();
+}
+
+function printCheckLabels(section) {
+  const d = checksData;
+  if (!d) return;
+
+  // Build label array: { line1: payee, line2: for/role, line3: check info, line4: amount }
+  const labels = [];
+  const comp = 'Chicago Open 2026';
+
+  const addLabel = (payTo, forDesc, checkNum, amount, extra) => {
+    if (!payTo && !checkNum && !amount) return; // skip blank rows
+    labels.push({ payTo: payTo||'—', forDesc, checkNum: checkNum||'', amount: amount||'', extra: extra||'' });
+  };
+
+  if (section === 'crew' || section === 'all') {
+    d.crew.forEach(r => {
+      const payTo = r.checkTo || r.legalName;
+      addLabel(payTo, r.role + (r.legalName !== payTo ? ` (${r.legalName})` : ''), r.checkNum, r.amount);
+    });
+  }
+
+  if (section === 'proDivisions' || section === 'all') {
+    d.proDivisions.forEach(r => {
+      // Leader check
+      if (r.leaderName || r.leaderCheck || r.leaderAmt) {
+        addLabel(r.leaderName, `${r.division} — ${r.place} (Leader)`, r.leaderCheck, '');
+      }
+      // Follower check
+      if (r.followerName || r.followerCheck || r.followerAmt) {
+        addLabel(r.followerName, `${r.division} — ${r.place} (Follower)`, r.followerCheck, '');
+      }
+    });
+  }
+
+  if (section === 'topTeachers' || section === 'all') {
+    d.topTeachers.forEach(r => {
+      addLabel(r.name, `${r.category} — ${r.place}`, r.checkNum, '');
+    });
+  }
+
+  if (section === 'potOfGold' || section === 'all') {
+    d.potOfGold.forEach(r => {
+      addLabel(r.name, 'Pot of Gold', r.checkNum, r.amount);
+    });
+  }
+
+  if (labels.length === 0) {
+    showModal('⚠️', 'No Labels to Print', 'No check data has been entered for this section yet. Fill in the names and amounts first.');
+    return;
+  }
+
+  // Avery 8160: 3 cols × 10 rows, 2.625" × 1" each
+  // Page margins: top 0.5", left 0.19", gaps: col 0.125", row 0
+  const labelCSS = `
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: Arial, sans-serif; }
+    .page { width:8.5in; padding: 0.5in 0.19in 0; }
+    .row  { display:flex; margin-bottom:0; }
+    .label {
+      width: 2.625in; height: 1in;
+      padding: 0.1in 0.15in;
+      overflow: hidden;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .label:not(:last-child) { margin-right: 0.125in; }
+    .comp  { font-size: 7px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+    .payto { font-size: 11px; font-weight: 700; color: #111; line-height: 1.2; }
+    .ford  { font-size: 8.5px; color: #444; margin-top: 2px; line-height: 1.2; }
+    .check { font-size: 8px; color: #666; margin-top: 3px; }
+    .amt   { font-size: 11px; font-weight: 700; color: #8B6914; margin-top: 2px; }
+    @media print {
+      body { margin:0; }
+      .page { page-break-after: always; }
+      .page:last-child { page-break-after: avoid; }
+    }
+  `;
+
+  // Chunk into pages of 30 (3×10)
+  const pages = [];
+  for (let i = 0; i < labels.length; i += 30) pages.push(labels.slice(i, i+30));
+
+  const pagesHTML = pages.map(page => {
+    // Pad to 30
+    while (page.length % 3 !== 0) page.push(null);
+    const rows = [];
+    for (let r = 0; r < page.length; r += 3) {
+      const cells = [page[r], page[r+1], page[r+2]].map(l => l
+        ? `<div class="label">
+            <div class="comp">${comp}</div>
+            <div class="payto">${l.payTo}</div>
+            <div class="ford">${l.forDesc}</div>
+            ${l.checkNum ? `<div class="check">Check #${l.checkNum}</div>` : ''}
+            ${l.amount   ? `<div class="amt">$${parseFloat(l.amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>` : ''}
+           </div>`
+        : `<div class="label"></div>`
+      ).join('');
+      rows.push(`<div class="row">${cells}</div>`);
+    }
+    return `<div class="page">${rows.join('')}</div>`;
+  }).join('');
+
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+    <title>Check Labels — ${comp}</title>
+    <style>${labelCSS}</style>
+  </head><body>
+    ${pagesHTML}
+    <script>setTimeout(()=>window.print(),400);<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+// ─── STUDIO SUMMARY PDF ───
+async function generateStudioSummaryPDF(studio, comp) {
+  const d = getStudioData(studio, comp);
+  const payments = await loadPayments(studio, comp);
+  const vipCount   = d.vip.filter(r=>r.name).length;
+  const vipRev     = vipCount * 695;
+  const ticketRev  = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
+  const entryRev   = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
+  const mealRev    = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+  const totalOwed  = vipRev + ticketRev + entryRev + mealRev;
+  const totalPaid  = payments.reduce((s,p)=>s+p.amount,0);
+  const balance    = totalOwed - totalPaid;
+  const today      = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+  // All people combined
+  const vipPeople = d.vip.filter(r=>r.name).map(r=>({
+    name:r.name, type:'VIP', proam:r.proam||'', firstTimer:false,
+    gift:true, meal:r.meal||'',
+    sessions:['thuMat','thuEve','friMat','friEve','satMat'].filter(s=>false) // VIP gets all meals, sessions via package
+  }));
+  const alcPeople = d.tickets.filter(r=>r.name).map(r=>({
+    name:r.name, type:'ALC', proam:r.proam||'', firstTimer:!!r.firstTimer,
+    gift:!!r.gift,
+    sessions:['thuMat','thuEve','friMat','friEve','satMat'].filter(s=>r[s])
+  }));
+  const allPeople = [...vipPeople, ...alcPeople];
+
+  // Meal summary
+  const mealSummary = [
+    {label:'Thu Dinner',   vip:vipCount, alc:d.meals.filter(r=>r.thuDinner).length},
+    {label:'Fri Breakfast',vip:vipCount, alc:d.meals.filter(r=>r.friBrk).length},
+    {label:'Fri Lunch',    vip:vipCount, alc:d.meals.filter(r=>r.friLunch).length},
+    {label:'Fri Dinner',   vip:vipCount, alc:d.meals.filter(r=>r.friDinner).length},
+    {label:'Sat Breakfast',vip:vipCount, alc:d.meals.filter(r=>r.satBrk).length},
+    {label:'Sat Lunch',    vip:vipCount, alc:d.meals.filter(r=>r.satLunch).length},
+    {label:'Sat Banquet',  vip:vipCount, alc:d.meals.filter(r=>r.satCocktail).length},
+  ];
+  const dinnerChoices = ['Beef','Fish','Chicken','Vegetarian'].map(c=>({
+    choice:c,
+    count: d.vip.filter(r=>r.meal===c).length + d.meals.filter(r=>r.satMealChoice===c).length
+  })).filter(c=>c.count>0);
+
+  const sessionLabels = {thuMat:'Thu Matinee',thuEve:'Thu Evening',friMat:'Fri Matinee',friEve:'Fri Evening',satMat:'Sat Matinee'};
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+  <title>Studio Summary — ${studio}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;font-size:12px;color:#111;padding:1.25rem 1.5rem}
+    h1{font-family:Georgia,serif;font-size:20px;color:#8B6914;margin-bottom:2px}
+    .sub{font-size:10px;color:#999;margin-bottom:1rem}
+    h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555;border-bottom:1.5px solid #c9a84c;padding-bottom:3px;margin:1rem 0 .5rem}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+    .box{background:#faf8f3;border:1px solid #e8dfc8;border-radius:6px;padding:.6rem .8rem}
+    .box-label{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#999;margin-bottom:2px}
+    .box-val{font-size:18px;font-weight:700;color:#8B6914}
+    .box-val.red{color:#c0392b}
+    .box-val.green{color:#27ae60}
+    table{width:100%;border-collapse:collapse;margin-bottom:.75rem;font-size:11px}
+    th{background:#f5f0e8;padding:5px 8px;text-align:left;font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:#777;border-bottom:1px solid #ddd}
+    td{padding:5px 8px;border-bottom:1px solid #f0ebe0;vertical-align:top}
+    .vip{background:#fffbf0;font-weight:600}
+    .new{color:#e67e22;font-size:9px;font-weight:700}
+    .gift{color:#27ae60;font-size:9px}
+    .sessions{font-size:9px;color:#555}
+    .miss{color:#c0392b;font-style:italic;font-size:10px}
+    @media print{body{padding:.5rem .75rem}}
+  </style>
+</head><body>
+  <h1>${studio}</h1>
+  <div class="sub">${comp} &nbsp;·&nbsp; Summary prepared ${today}</div>
+
+  <div class="grid">
+    <div class="box"><div class="box-label">Total Competitors</div><div class="box-val">${allPeople.length}</div></div>
+    <div class="box"><div class="box-label">VIP / ALC</div><div class="box-val">${vipCount} VIP &nbsp;/&nbsp; ${alcPeople.length} ALC</div></div>
+    <div class="box"><div class="box-label">Total Owed</div><div class="box-val">$${totalOwed.toFixed(2)}</div></div>
+    <div class="box"><div class="box-label">Balance Due</div>
+      <div class="box-val ${balance>0.005?'red':balance<-0.005?'green':''}">
+        ${balance>0.005?'$'+balance.toFixed(2)+' OUTSTANDING':balance<-0.005?'OVERPAID $'+Math.abs(balance).toFixed(2):'PAID IN FULL ✓'}
+      </div>
+    </div>
+  </div>
+
+  <h2>People</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Type</th><th>Role</th><th>Sessions Purchased</th><th>Gift</th><th>Dinner</th></tr></thead>
+    <tbody>
+      ${[...d.vip.filter(r=>r.name).map(r=>`
+        <tr class="vip">
+          <td><strong>${r.name}</strong></td>
+          <td>VIP</td>
+          <td>${r.proam||''}</td>
+          <td><span class="sessions">Full Package</span></td>
+          <td><span class="gift">✓</span></td>
+          <td>${r.meal||'<span class="miss">Missing</span>'}</td>
+        </tr>`),
+      ...d.tickets.filter(r=>r.name).map(r=>{
+        const sess = ['thuMat','thuEve','friMat','friEve','satMat'].filter(s=>r[s]).map(s=>sessionLabels[s]).join(', ');
+        return `<tr>
+          <td>${r.name}${r.firstTimer?' <span class="new">★ NEW</span>':''}</td>
+          <td>ALC</td>
+          <td>${r.proam||''}</td>
+          <td><span class="sessions">${sess||'—'}</span></td>
+          <td>${r.gift?'<span class="gift">✓</span>':'—'}</td>
+          <td>—</td>
+        </tr>`;
+      })].join('')}
+    </tbody>
+  </table>
+
+  <div class="grid">
+    <div>
+      <h2>Meal Counts</h2>
+      <table>
+        <thead><tr><th>Meal</th><th>VIP</th><th>ALC</th><th>Total</th></tr></thead>
+        <tbody>
+          ${mealSummary.map(m=>`<tr>
+            <td>${m.label}</td><td>${m.vip}</td><td>${m.alc}</td><td><strong>${m.vip+m.alc}</strong></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h2>Sat Banquet Dinner Choices</h2>
+      <table>
+        <thead><tr><th>Choice</th><th>Count</th></tr></thead>
+        <tbody>
+          ${dinnerChoices.length
+            ? dinnerChoices.map(c=>`<tr><td>${c.choice}</td><td><strong>${c.count}</strong></td></tr>`).join('')
+            : '<tr><td colspan="2" style="color:#999;font-style:italic">Not yet selected</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>setTimeout(()=>window.print(),400);<\/script>
+</body></html>`);
+  w.document.close();
+}
+
+// ─── CHECK-IN SHEET PDF ───
+async function generateCheckinSheetPDF(comp) {
+  const allStudios = getAllStudiosForComp(comp);
+  const today = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const sessionLabels = [
+    {key:'thuMat', label:'Thu\nMat'},
+    {key:'thuEve', label:'Thu\nEve'},
+    {key:'friMat', label:'Fri\nMat'},
+    {key:'friEve', label:'Fri\nEve'},
+    {key:'satMat', label:'Sat\nMat'},
+  ];
+
+  let bodyHTML = '';
+
+  for (const studio of allStudios) {
+    const d = getStudioData(studio, comp);
+    const vips = d.vip.filter(r=>r.name);
+    const alcs = d.tickets.filter(r=>r.name);
+    if (vips.length === 0 && alcs.length === 0) continue;
+
+    const vipRows = vips.map(r=>`
+      <tr class="vip-row">
+        <td class="name-col"><strong>${r.name}</strong></td>
+        <td class="type-col"><span class="badge-vip">VIP</span></td>
+        <td>${r.proam||''}</td>
+        <td class="new-col">—</td>
+        <td class="center"><span class="check-gift">✓</span></td>
+        <td class="center">All</td>
+        <td class="center">—</td>
+        <td class="center">—</td>
+        <td class="center">—</td>
+        <td class="center">—</td>
+        <td class="center">—</td>
+        <td class="sig-col"></td>
+      </tr>`).join('');
+
+    const alcRows = alcs.map(r=>{
+      const sessCells = sessionLabels.map(s=>
+        `<td class="center">${r[s.key]?'<span class="has-sess">✓</span>':'—'}</td>`
+      ).join('');
+      return `<tr>
+        <td class="name-col">${r.name}</td>
+        <td class="type-col"><span class="badge-alc">ALC</span></td>
+        <td>${r.proam||''}</td>
+        <td class="new-col">${r.firstTimer?'<span class="new-flag">★ NEW</span>':'—'}</td>
+        <td class="center">${r.gift?'<span class="check-gift">✓</span>':'—'}</td>
+        ${sessCells}
+        <td class="sig-col"></td>
+      </tr>`;
+    }).join('');
+
+    bodyHTML += `
+      <div class="studio-block">
+        <div class="studio-header">${studio} <span class="studio-count">${vips.length} VIP · ${alcs.length} ALC · ${vips.length+alcs.length} total</span></div>
+        <table>
+          <thead><tr>
+            <th class="name-col">Name</th>
+            <th class="type-col">Type</th>
+            <th>Role</th>
+            <th class="new-col">New?</th>
+            <th class="center">Gift</th>
+            <th class="center">Thu<br>Mat</th>
+            <th class="center">Thu<br>Eve</th>
+            <th class="center">Fri<br>Mat</th>
+            <th class="center">Fri<br>Eve</th>
+            <th class="center">Sat<br>Mat</th>
+            <th class="center">Dinner<br>Ticket</th>
+            <th class="sig-col">Initials</th>
+          </tr></thead>
+          <tbody>${vipRows}${alcRows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+  <title>Check-In Sheet — ${comp}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;font-size:10px;color:#111;padding:.5rem .75rem}
+    .page-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.75rem;border-bottom:2px solid #c9a84c;padding-bottom:.35rem}
+    .page-header h1{font-family:Georgia,serif;font-size:16px;color:#8B6914}
+    .page-header span{font-size:9px;color:#999}
+    .studio-block{margin-bottom:1rem;page-break-inside:avoid}
+    .studio-header{background:#8B6914;color:#fff;font-weight:700;font-size:11px;padding:4px 8px;border-radius:4px 4px 0 0;display:flex;justify-content:space-between;align-items:center}
+    .studio-count{font-size:9px;font-weight:400;opacity:.85}
+    table{width:100%;border-collapse:collapse;font-size:9.5px}
+    th{background:#f5f0e8;padding:4px 5px;text-align:center;font-size:8px;letter-spacing:.05em;text-transform:uppercase;color:#777;border:1px solid #ddd;line-height:1.2}
+    th.name-col{text-align:left}
+    td{padding:4px 5px;border:1px solid #eee;vertical-align:middle}
+    .name-col{min-width:130px;max-width:160px}
+    .type-col{width:40px;text-align:center}
+    .new-col{width:45px;text-align:center}
+    .center{text-align:center}
+    .sig-col{width:55px}
+    .vip-row{background:#fffbf0}
+    .badge-vip{background:#8B6914;color:#fff;font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.05em}
+    .badge-alc{background:#555;color:#fff;font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.05em}
+    .new-flag{color:#e67e22;font-weight:700;font-size:9px}
+    .check-gift{color:#27ae60;font-weight:700}
+    .has-sess{color:#2980b9;font-weight:700}
+    @media print{
+      body{padding:.25rem .5rem}
+      .studio-block{page-break-inside:avoid}
+    }
+  </style>
+</head><body>
+  <div class="page-header">
+    <h1>${comp} — Check-In Sheet</h1>
+    <span>Printed ${today} &nbsp;·&nbsp; For staff use only</span>
+  </div>
+  ${bodyHTML||'<p style="color:#999">No data loaded yet.</p>'}
   <script>setTimeout(()=>window.print(),400);<\/script>
 </body></html>`);
   w.document.close();
