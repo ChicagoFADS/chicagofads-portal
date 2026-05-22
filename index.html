@@ -1316,6 +1316,10 @@ function loadStudioData() {
   renderCompEntriesTable(d.compEntries);
   initEntryMode();
   renderMealsTable(d.meals);
+  // Show balance popup only for actual studio logins (not organizer managing)
+  if (currentUser && currentUser.type === 'studio') {
+    setTimeout(() => showBalancePopupIfOwed(currentStudio, currentComp), 800);
+  }
 }
 
 // ── VIP ──
@@ -1657,13 +1661,50 @@ function triggerAutoSave() {
   autoSaveTimer = setTimeout(() => saveState(), 1200);
 }
 
+// ── MODAL ──
+function showModal(icon, title, body) {
+  document.getElementById('modalIcon').textContent = icon;
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = body;
+  document.getElementById('modalOverlay').style.display = 'flex';
+}
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modalOverlay')) return;
+  document.getElementById('modalOverlay').style.display = 'none';
+}
+
 async function saveAll() {
   const issues = validateStudioData();
   if (issues.length > 0) {
-    const msg = issues.map(x => `• ${x}`).join('\n');
-    if (!confirm(`There are incomplete fields:\n\n${msg}\n\nSave anyway?`)) return;
+    showModal('⚠️', 'Missing Information',
+      '<strong>Meal Choices Missing — please update:</strong><br><br>' +
+      issues.map(x => `• ${x}`).join('<br>')
+    );
+    // Still save — just warn
   }
   await saveState();
+}
+
+async function showBalancePopupIfOwed(studio, comp) {
+  try {
+    const d = getStudioData(studio, comp);
+    const vipRev    = d.vip.filter(r=>r.name).length * 695;
+    const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
+    const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
+    const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+    const totalOwed = vipRev + ticketRev + entryRev + mealRev;
+    if (totalOwed <= 0) return;
+    const payments = await loadPayments(studio, comp);
+    const totalPaid = payments.reduce((s,p)=>s+p.amount,0);
+    const balance = totalOwed - totalPaid;
+    if (balance > 0.005) {
+      showModal('💰', 'Balance Due',
+        `You have an outstanding balance for <strong>${comp}</strong>.<br><br>` +
+        `Please submit payment as soon as possible to avoid a <strong>5% late fee</strong>.<br><br>` +
+        `Contact your organizer if you have any questions.`
+      );
+    }
+  } catch(e) {}
 }
 
 function validateStudioData() {
@@ -2303,6 +2344,15 @@ function renderAdminTab() {
   ];
 
   el.innerHTML = `
+    <div class="section-card" style="margin-bottom:1.5rem;border-top:3px solid var(--gold)">
+      <div class="section-header">
+        <div class="section-title">📋 Quick Status Summary</div>
+        <button class="btn btn-sm" style="width:auto;margin:0;background:var(--gold);color:var(--black)" onclick="generateStatusSummaryPDF()">Print Summary PDF</button>
+      </div>
+      <div class="section-body">
+        <p style="font-size:0.68rem;color:var(--muted)">One-page printable summary of outstanding balances and missing meal choices across all studios.</p>
+      </div>
+    </div>
     ${oneTimeImports.length ? `
     <div class="section-card" style="margin-bottom:1.5rem;border-top:3px solid var(--green)">
       <div class="section-header"><div class="section-title">⚡ One-Time Data Imports</div><span class="badge badge-green">Use once then remove</span></div>
@@ -4736,6 +4786,97 @@ async function loadMenomoneeFallsData() {
   renderAdminTab(); renderPaymentsTable();
 }
 
+// ─── QUICK STATUS SUMMARY PDF ───
+async function generateStatusSummaryPDF() {
+  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const allStudios = getAllStudiosForComp(comp);
+  const rows = [];
+
+  for (const studio of allStudios) {
+    const d = getStudioData(studio, comp);
+    const vipRev    = d.vip.filter(r=>r.name).length * 695;
+    const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
+    const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
+    const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+    const totalOwed = vipRev + ticketRev + entryRev + mealRev;
+    if (totalOwed === 0) continue;
+
+    const payments = await loadPayments(studio, comp);
+    const totalPaid = payments.reduce((s,p)=>s+p.amount,0);
+    const balance = totalOwed - totalPaid;
+
+    // Missing meal choices
+    const missingMeals = [];
+    d.vip.filter(r=>r.name && !r.meal).forEach(r => missingMeals.push(r.name));
+    d.meals.filter(r=>r.name && r.satCocktail && !r.childrenMeal && !r.satMealChoice)
+           .forEach(r => missingMeals.push(r.name));
+
+    rows.push({ studio, balance, totalOwed, totalPaid, missingMeals });
+  }
+
+  const today = new Date().toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+  const balanceRows = rows.filter(r => r.balance > 0.005);
+  const mealRows    = rows.filter(r => r.missingMeals.length > 0);
+
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+  <title>Status Summary — ${comp}</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 1.5rem 2rem; }
+    h1 { font-family: Georgia, serif; font-size: 22px; color: #8B6914; margin-bottom: 4px; }
+    .sub { font-size: 11px; color: #888; margin-bottom: 1.5rem; }
+    h2 { font-size: 13px; font-weight: 700; color: #333; border-bottom: 2px solid #c9a84c; padding-bottom: 4px; margin: 1.25rem 0 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    th { background: #f5f0e8; text-align: left; padding: 6px 10px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #666; border-bottom: 1px solid #ddd; }
+    td { padding: 7px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .bal { font-weight: 700; color: #c0392b; }
+    .names { color: #555; font-size: 11px; }
+    .none { color: #888; font-style: italic; font-size: 11px; padding: 0.5rem 10px; }
+    .footer { margin-top: 2rem; font-size: 10px; color: #aaa; border-top: 1px solid #eee; padding-top: 0.5rem; }
+    @media print { body { padding: 0.5rem 1rem; } }
+  </style>
+</head><body>
+  <h1>Chicago Open 2026 — Status Summary</h1>
+  <div class="sub">Generated ${today} &nbsp;·&nbsp; Organizer copy</div>
+
+  <h2>💰 Outstanding Balances</h2>
+  ${balanceRows.length === 0
+    ? `<div class="none">All studios are paid in full. 🎉</div>`
+    : `<table>
+        <thead><tr><th>Studio</th><th>Total Owed</th><th>Paid</th><th>Balance Due</th></tr></thead>
+        <tbody>
+          ${balanceRows.sort((a,b)=>b.balance-a.balance).map(r=>`
+          <tr>
+            <td>${r.studio}</td>
+            <td>$${r.totalOwed.toFixed(2)}</td>
+            <td>$${r.totalPaid.toFixed(2)}</td>
+            <td class="bal">$${r.balance.toFixed(2)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`}
+
+  <h2>🍽️ Missing Dinner Choices</h2>
+  ${mealRows.length === 0
+    ? `<div class="none">All dinner choices are complete. ✓</div>`
+    : `<table>
+        <thead><tr><th>Studio</th><th>People Missing Dinner Choice</th></tr></thead>
+        <tbody>
+          ${mealRows.map(r=>`
+          <tr>
+            <td>${r.studio}</td>
+            <td class="names">${r.missingMeals.join(', ')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`}
+
+  <div class="footer">Chicago Open 2026 &nbsp;·&nbsp; Fred Astaire Dance Studios &nbsp;·&nbsp; Printed ${today}</div>
+  <script>setTimeout(()=>window.print(),400);<\/script>
+</body></html>`);
+  w.document.close();
+}
+
 // ═══════════════════════════════════════════════════════
 // INIT — wait for Firebase before loading
 // ═══════════════════════════════════════════════════════
@@ -4758,5 +4899,16 @@ function initApp() {
 }
 initApp();
 </script>
+
+<!-- ── MODAL POPUPS ── -->
+<div id="modalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9000;align-items:center;justify-content:center" onclick="closeModal(event)">
+  <div id="modalBox" style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:2rem 2.5rem;max-width:420px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.4);position:relative" onclick="event.stopPropagation()">
+    <div id="modalIcon" style="font-size:2.2rem;margin-bottom:0.75rem"></div>
+    <div id="modalTitle" style="font-family:'Cormorant Garamond',Georgia,serif;font-size:1.5rem;font-weight:700;color:var(--gold);margin-bottom:0.5rem"></div>
+    <div id="modalBody" style="font-size:0.82rem;color:var(--text);line-height:1.7;margin-bottom:1.5rem"></div>
+    <button class="btn" style="width:auto;min-width:140px;margin:0 auto" onclick="closeModal()">Got It</button>
+  </div>
+</div>
+
 </body>
 </html>
