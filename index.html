@@ -765,6 +765,27 @@
           <button class="btn btn-sm btn-success" onclick="saveAll()">Save Data</button>
         </div>
         <div class="section-body" style="overflow-x:auto">
+
+          <!-- Quick Total Override -->
+          <div id="entryOverridePanel" style="margin-bottom:1rem;padding:0.75rem;background:var(--card-bg);border:1px solid var(--border);border-radius:6px">
+            <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+              <label style="margin:0;font-size:0.7rem;letter-spacing:0.08em">ENTRY MODE</label>
+              <div style="display:flex;gap:0.5rem">
+                <button id="modeDetailBtn" class="btn btn-sm" style="width:auto;margin:0;font-size:0.65rem" onclick="setEntryMode('detail')">Per Division</button>
+                <button id="modeQuickBtn" class="btn btn-sm btn-outline" style="width:auto;margin:0;font-size:0.65rem" onclick="setEntryMode('quick')">Quick Total $</button>
+              </div>
+              <div id="quickTotalInput" style="display:none;align-items:center;gap:0.5rem">
+                <span style="font-size:0.7rem;color:var(--muted)">Invoice entry total:</span>
+                <span style="color:var(--gold);font-size:0.8rem">$</span>
+                <input type="number" id="entryOverrideVal" min="0" step="0.01" placeholder="0.00"
+                  style="width:120px;font-size:0.85rem;font-weight:600;color:var(--gold)"
+                  oninput="updateEntryOverride(+this.value)"/>
+                <span id="overrideSavedMsg" style="font-size:0.65rem;color:var(--green);display:none">✓ saved</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="entryDetailTable">
           <p style="font-size:0.65rem;color:var(--muted);margin-bottom:1rem;letter-spacing:0.05em">Enter number of entries per division. Fees auto-calculate based on VIP or ALC pricing.</p>
           <table class="data-table" id="compEntriesTable">
             <thead>
@@ -790,10 +811,9 @@
             </tfoot>
           </table>
         </div>
+        </div><!-- end entryDetailTable -->
       </div>
     </div>
-
-    <!-- MEALS TAB -->
     <div class="tab-content" id="tab-meals">
       <div class="section-card">
         <div class="section-header">
@@ -1294,6 +1314,7 @@ function loadStudioData() {
   renderVipTable(d.vip);
   renderTicketsTable(d.tickets);
   renderCompEntriesTable(d.compEntries);
+  initEntryMode();
   renderMealsTable(d.meals);
 }
 
@@ -1612,13 +1633,53 @@ async function saveAll() {
   await saveState();
 }
 
-function calcCompEntriesTotal(compEntries, comp) {
+function calcCompEntriesTotal(compEntries, comp, entryOverride) {
+  if (entryOverride !== undefined && entryOverride !== null && entryOverride > 0) return entryOverride;
   const divisions = comp ? getDivisionsForComp(comp) : COMP_DIVISIONS;
   return divisions.reduce((sum, div) => {
     const i = COMP_DIVISIONS.indexOf(div);
     const s = compEntries[i] || {};
     return sum + (s.vipQty||0)*div.vip + (s.alcQty||0)*div.alc;
   }, 0);
+}
+
+function setEntryMode(mode) {
+  const d = getStudioData(currentStudio, currentComp);
+  d.entryMode = mode;
+  document.getElementById('entryDetailTable').style.display = mode === 'detail' ? 'block' : 'none';
+  document.getElementById('quickTotalInput').style.display = mode === 'quick' ? 'flex' : 'none';
+  document.getElementById('modeDetailBtn').className = mode === 'detail' ? 'btn btn-sm' : 'btn btn-sm btn-outline';
+  document.getElementById('modeQuickBtn').className = mode === 'quick' ? 'btn btn-sm' : 'btn btn-sm btn-outline';
+  if (mode === 'quick') {
+    document.getElementById('entryOverrideVal').value = d.entryOverride || '';
+  }
+  triggerAutoSave();
+}
+
+function updateEntryOverride(val) {
+  const d = getStudioData(currentStudio, currentComp);
+  d.entryOverride = val || 0;
+  // Update the grand total display in the tfoot
+  document.getElementById('ceGrandTotal').textContent = '$' + val.toFixed(2);
+  document.getElementById('ceVipTotal').textContent = '';
+  document.getElementById('ceAlcTotal').textContent = '';
+  const msg = document.getElementById('overrideSavedMsg');
+  msg.style.display = 'inline';
+  setTimeout(() => msg.style.display = 'none', 1500);
+  triggerAutoSave();
+}
+
+function initEntryMode() {
+  const d = getStudioData(currentStudio, currentComp);
+  const mode = d.entryMode || 'detail';
+  document.getElementById('entryDetailTable').style.display = mode === 'detail' ? 'block' : 'none';
+  document.getElementById('quickTotalInput').style.display = mode === 'quick' ? 'flex' : 'none';
+  document.getElementById('modeDetailBtn').className = mode === 'detail' ? 'btn btn-sm' : 'btn btn-sm btn-outline';
+  document.getElementById('modeQuickBtn').className = mode === 'quick' ? 'btn btn-sm' : 'btn btn-sm btn-outline';
+  if (mode === 'quick' && d.entryOverride) {
+    document.getElementById('entryOverrideVal').value = d.entryOverride;
+    document.getElementById('ceGrandTotal').textContent = '$' + (+d.entryOverride).toFixed(2);
+  }
 }
 
 function renderStudioSummary() {
@@ -1642,7 +1703,7 @@ function renderStudioSummary() {
   const totalPeople = vipCount + alcPeople;
 
   // Entry counts
-  const entryRev   = calcCompEntriesTotal(d.compEntries, currentComp);
+  const entryRev   = calcCompEntriesTotal(d.compEntries, currentComp, d.entryOverride);
   const totalVipEntries = COMP_DIVISIONS.reduce((s,_,i) => s + ((d.compEntries[i]||{}).vipQty||0), 0);
   const totalAlcEntries = COMP_DIVISIONS.reduce((s,_,i) => s + ((d.compEntries[i]||{}).alcQty||0), 0);
 
@@ -1793,7 +1854,7 @@ function getCompData(comp) {
     const vipCount = d.vip.filter(r=>r.name).length;
     const vipRev = vipCount * 695;
     const ticketRev = d.tickets.reduce((sum,r)=>sum+calcTicketFee(r),0);
-    const entryRev = calcCompEntriesTotal(d.compEntries, comp);
+    const entryRev = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
     const mealRev = d.meals.reduce((sum,r)=>sum+calcMealFee(r),0);
     const ticketHolders = d.tickets.filter(r=>r.name).length;
     const mealPkgs = d.meals.filter(r=>r.name).length;
@@ -2077,7 +2138,7 @@ function renderCompareTab() {
       const d = getStudioData(s, c);
       const vipR = d.vip.filter(r=>r.name).length * 695;
       const tickR = d.tickets.reduce((sum,r)=>sum+calcTicketFee(r),0);
-      const entR = calcCompEntriesTotal(d.compEntries, c);
+      const entR = calcCompEntriesTotal(d.compEntries, c, d.entryOverride);
       const mealR = d.meals.reduce((sum,r)=>sum+calcMealFee(r),0);
       return vipR+tickR+entR+mealR;
     });
@@ -2512,7 +2573,7 @@ async function renderVisitingTab() {
       const ticketCount = d.tickets.filter(r=>r.name).length;
       const mealCount = d.meals.filter(r=>r.name).length;
       const total = vipCount*695 + d.tickets.reduce((s,r)=>s+calcTicketFee(r),0) +
-                    calcCompEntriesTotal(d.compEntries, comp) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+                    calcCompEntriesTotal(d.compEntries, comp, d.entryOverride) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
       const payments = await loadPayments(name, comp);
       const totalPaid = payments.reduce((s,p)=>s+p.amount,0);
       const balance = total - totalPaid;
@@ -2573,7 +2634,7 @@ async function renderVisitingTab() {
     for (const name of visiting) {
       const d = getStudioData(name, comp);
       const t = d.vip.filter(r=>r.name).length*695 + d.tickets.reduce((s,r)=>s+calcTicketFee(r),0) +
-                calcCompEntriesTotal(d.compEntries, comp) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+                calcCompEntriesTotal(d.compEntries, comp, d.entryOverride) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
       const pmts = await loadPayments(name, comp);
       const paid = pmts.reduce((s,p)=>s+p.amount,0);
       vtotalOwed += t; vtotalPaid += paid;
@@ -2725,6 +2786,7 @@ function renderVisitingDataEntry(comp) {
   renderVipTable(d.vip);
   renderTicketsTable(d.tickets);
   renderCompEntriesTable(d.compEntries);
+  initEntryMode();
   renderMealsTable(d.meals);
 }
 
@@ -2774,7 +2836,7 @@ function generateRegistrationPDF(studio, comp) {
 
   const vipRev    = vipCount * 695;
   const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
-  const entryRev  = calcCompEntriesTotal(d.compEntries, comp);
+  const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
   const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
   const grandTotal = vipRev + ticketRev + entryRev + mealRev;
   const totalGifts = vipCount + d.tickets.filter(r=>r.gift).length;
@@ -3109,7 +3171,7 @@ async function renderPaymentsTable() {
       const d = getStudioData(studio, comp);
       const vipRev    = d.vip.filter(r=>r.name).length * 695;
       const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
-      const entryRev  = calcCompEntriesTotal(d.compEntries, comp);
+      const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
       const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
       const totalOwed = vipRev + ticketRev + entryRev + mealRev;
 
