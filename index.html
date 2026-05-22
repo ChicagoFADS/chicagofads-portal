@@ -1329,6 +1329,8 @@ function renderVipTable(rows) {
 
 function makeVipRow(i, r = {}) {
   const tr = document.createElement('tr');
+  tr.id = `vipRow${i}`;
+  const mealMissing = r.name && !r.meal;
   tr.innerHTML = `
     <td class="row-num">${i+1}</td>
     <td><input type="text" value="${r.name||''}" placeholder="Full name" style="min-width:180px" onchange="updateRow('vip',${i},'name',this.value)"/></td>
@@ -1342,7 +1344,7 @@ function makeVipRow(i, r = {}) {
       <option ${r.firstTimer==='Yes'?'selected':''}>Yes</option>
       <option ${r.firstTimer==='No'?'selected':''}>No</option>
     </select></td>
-    <td><select onchange="updateRow('vip',${i},'meal',this.value)">
+    <td><select id="vipMeal${i}" onchange="updateRow('vip',${i},'meal',this.value)" style="${mealMissing?'outline:2px solid var(--red);border-radius:4px':''}">
       <option value="">— Choose —</option>
       <option ${r.meal==='Beef'?'selected':''}>Beef</option>
       <option ${r.meal==='Fish'?'selected':''}>Fish</option>
@@ -1550,6 +1552,7 @@ function makeMealRow(i, r = {}) {
   const tr = document.createElement('tr');
   const fee = calcMealFee(r);
   const chk = (val) => val ? 'checked' : '';
+  const mealMissing = r.satCocktail && !r.childrenMeal && !r.satMealChoice;
   tr.innerHTML = `
     <td class="row-num">${i+1}</td>
     <td><input type="text" value="${r.name||''}" placeholder="Full name" onchange="updateRow('meals',${i},'name',this.value)"/></td>
@@ -1564,20 +1567,45 @@ function makeMealRow(i, r = {}) {
     <td><input type="checkbox" ${chk(r.friDinner)} onchange="updateRow('meals',${i},'friDinner',this.checked);refreshMealRow(${i})"/></td>
     <td><input type="checkbox" ${chk(r.satBrk)} onchange="updateRow('meals',${i},'satBrk',this.checked);refreshMealRow(${i})"/></td>
     <td><input type="checkbox" ${chk(r.satLunch)} onchange="updateRow('meals',${i},'satLunch',this.checked);refreshMealRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.satCocktail)} onchange="updateRow('meals',${i},'satCocktail',this.checked);refreshMealRow(${i})"/></td>
-    <td><select onchange="updateRow('meals',${i},'satMealChoice',this.value)">
-      <option value="">—</option>
+    <td><input type="checkbox" ${chk(r.satCocktail)} onchange="updateRow('meals',${i},'satCocktail',this.checked);refreshMealRow(${i});checkMealChoice(${i})"/></td>
+    <td><select id="mealChoice${i}" onchange="updateRow('meals',${i},'satMealChoice',this.value);checkMealChoice(${i})"
+        style="${mealMissing?'outline:2px solid var(--red);border-radius:4px':''}">
+      <option value="">— Choose —</option>
       <option ${r.satMealChoice==='Beef'?'selected':''}>Beef</option>
       <option ${r.satMealChoice==='Fish'?'selected':''}>Fish</option>
       <option ${r.satMealChoice==='Chicken'?'selected':''}>Chicken</option>
       <option ${r.satMealChoice==='Vegetarian'?'selected':''}>Vegetarian</option>
-    </select></td>
-    <td style="text-align:center"><input type="checkbox" title="Age 12 &amp; under — $45" ${chk(r.childrenMeal)} onchange="updateRow('meals',${i},'childrenMeal',this.checked);refreshMealRow(${i})"/></td>
+    </select>${mealMissing?`<span style="color:var(--red);font-size:0.6rem;display:block;margin-top:2px">⚠ needed</span>`:''}</td>
+    <td style="text-align:center"><input type="checkbox" title="Age 12 &amp; under — $45" ${chk(r.childrenMeal)} onchange="updateRow('meals',${i},'childrenMeal',this.checked);refreshMealRow(${i});checkMealChoice(${i})"/></td>
     <td><input type="text" value="${r.allergy||''}" placeholder="None" onchange="updateRow('meals',${i},'allergy',this.value)"/></td>
     <td id="mealFee${i}" style="color:${r.childrenMeal?'#e8c97a':'var(--gold-light)'}">$${fee.toFixed(2)}</td>
     <td><button class="btn btn-sm btn-danger" onclick="removeRow('meals',${i})">✕</button></td>
   `;
   return tr;
+}
+
+function checkMealChoice(i) {
+  const d = getStudioData(currentStudio, currentComp);
+  const r = d.meals[i] || {};
+  const missing = r.satCocktail && !r.childrenMeal && !r.satMealChoice;
+  const sel = document.getElementById('mealChoice' + i);
+  if (sel) {
+    sel.style.outline = missing ? '2px solid var(--red)' : '';
+    sel.style.borderRadius = missing ? '4px' : '';
+    // Update or remove the warning span next to the select
+    let warn = sel.nextElementSibling;
+    if (missing) {
+      if (!warn || !warn.classList.contains('meal-warn')) {
+        const span = document.createElement('span');
+        span.className = 'meal-warn';
+        span.style.cssText = 'color:var(--red);font-size:0.6rem;display:block;margin-top:2px';
+        span.textContent = '⚠ needed';
+        sel.after(span);
+      }
+    } else {
+      if (warn && warn.classList.contains('meal-warn')) warn.remove();
+    }
+  }
 }
 
 function refreshMealRow(i) {
@@ -1630,7 +1658,73 @@ function triggerAutoSave() {
 }
 
 async function saveAll() {
+  const issues = validateStudioData();
+  if (issues.length > 0) {
+    const msg = issues.map(x => `• ${x}`).join('\n');
+    if (!confirm(`There are incomplete fields:\n\n${msg}\n\nSave anyway?`)) return;
+  }
   await saveState();
+}
+
+function validateStudioData() {
+  const d = getStudioData(currentStudio, currentComp);
+  const issues = [];
+
+  // VIP tab — missing name, proam, or dinner choice for sat attenders
+  d.vip.forEach((r, i) => {
+    if (!r.name || !r.name.trim()) {
+      issues.push(`VIP row ${i+1}: missing name`);
+      highlightRow('vipRow', i, true);
+    } else {
+      highlightRow('vipRow', i, false);
+    }
+    if (r.name && !r.proam) {
+      issues.push(`VIP "${r.name}": Pro/Am not selected`);
+    }
+    if (r.name && !r.meal) {
+      issues.push(`VIP "${r.name}": dinner choice not selected`);
+      highlightCell('vipMeal', i, true);
+    } else {
+      highlightCell('vipMeal', i, false);
+    }
+  });
+
+  // Tickets — missing name or proam
+  d.tickets.forEach((r, i) => {
+    if (!r.name || !r.name.trim()) return; // blank rows ok
+    if (!r.proam) {
+      issues.push(`Ticket "${r.name}": Pro/Am not selected`);
+    }
+    if (!r.vipAlc) {
+      issues.push(`Ticket "${r.name}": VIP/ALC not selected`);
+    }
+  });
+
+  // Meals — missing name or dinner choice if satCocktail is checked
+  d.meals.forEach((r, i) => {
+    if (!r.name || !r.name.trim()) return;
+    if (r.satCocktail && !r.childrenMeal && !r.satMealChoice) {
+      issues.push(`Meal "${r.name}": attending Sat Banquet but dinner choice not selected`);
+      highlightCell('mealChoice', i, true);
+    } else {
+      highlightCell('mealChoice', i, false);
+    }
+  });
+
+  return issues;
+}
+
+function highlightRow(prefix, i, on) {
+  const el = document.getElementById(prefix + i);
+  if (el) el.style.background = on ? 'rgba(220,60,60,0.12)' : '';
+}
+
+function highlightCell(prefix, i, on) {
+  const el = document.getElementById(prefix + i);
+  if (el) {
+    el.style.outline = on ? '2px solid var(--red)' : '';
+    el.style.borderRadius = on ? '4px' : '';
+  }
 }
 
 function calcCompEntriesTotal(compEntries, comp, entryOverride) {
