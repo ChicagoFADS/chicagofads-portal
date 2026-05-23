@@ -360,15 +360,84 @@
 
   .data-table input, .data-table select {
     padding: 0.3rem 0.5rem;
-    font-size: 0.7rem;
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--text);
+    font-size: 0.72rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #fff;
+    color: #1a1a1a;
+    font-family: inherit;
+  }
+
+  .data-table select {
+    cursor: pointer;
+    min-width: 80px;
   }
 
   .data-table input:focus, .data-table select:focus {
     background: #fff;
     border-color: var(--gold);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(185,134,11,0.15);
+  }
+
+  .data-table select option {
+    background: #fff;
+    color: #1a1a1a;
+  }
+
+  /* ── PEOPLE LIST — compact ── */
+  .people-table { width:100%; border-collapse:collapse; }
+  .people-table th {
+    background:#f5f0e8; padding:5px 8px; font-size:0.62rem;
+    letter-spacing:0.08em; text-transform:uppercase; color:#888;
+    border-bottom:2px solid var(--border); text-align:left; white-space:nowrap;
+  }
+  .people-table td { padding:0; border-bottom:1px solid #f0ebe0; vertical-align:middle; }
+  .people-table tr:hover td { background:#fdfbf5; }
+  .people-table tr.vip-locked td { background:#fffbf0; }
+
+  /* inline inputs inside table */
+  .people-table input[type="text"] {
+    width:100%; font-size:0.75rem; border:none; background:transparent;
+    padding:6px 8px; color:#1a1a1a; font-family:inherit;
+  }
+  .people-table input[type="text"]:focus {
+    background:#fff; outline:1px solid var(--gold); border-radius:2px;
+  }
+  .people-table select {
+    font-size:0.72rem; border:none; background:transparent; color:#1a1a1a;
+    padding:5px 4px; cursor:pointer; width:100%;
+  }
+  .people-table select:focus { background:#fff; outline:1px solid var(--gold); }
+  .pchk { display:flex; flex-direction:column; gap:3px; padding:5px 6px; }
+  .pchk label {
+    display:flex; align-items:center; gap:4px; font-size:0.68rem;
+    color:var(--text); white-space:nowrap; cursor:pointer; user-select:none;
+  }
+  .pchk label:hover { color:var(--gold); }
+  .pchk input[type="checkbox"] { width:13px; height:13px; accent-color:var(--gold); cursor:pointer; flex-shrink:0; }
+  .pchk label.checked { color:var(--gold); font-weight:600; }
+  .vip-pkg-badge {
+    display:inline-block; background:var(--gold); color:#fff;
+    font-size:0.6rem; font-weight:700; padding:2px 6px; border-radius:3px;
+    letter-spacing:0.05em;
+  }
+  .p-total { font-size:0.72rem; font-weight:700; color:var(--gold); padding:0 8px; white-space:nowrap; }
+  .p-remove { background:none; border:none; color:#ccc; cursor:pointer; font-size:0.9rem; padding:0 6px; }
+  .p-remove:hover { color:var(--red); }
+  .dinner-sel {
+    font-size:0.68rem; border:1px solid var(--border); border-radius:3px;
+    background:#fff; color:#1a1a1a; padding:2px 4px; width:100%; margin-top:3px;
+  }
+  .dinner-sel.missing { outline:2px solid var(--red); }
+  .allergy-inp {
+    font-size:0.65rem; border:1px solid var(--border); border-radius:3px;
+    background:#fff; color:#1a1a1a; padding:2px 5px; width:100%; margin-top:3px;
+  }
+  .price-muted { color:var(--muted); font-size:0.58rem; margin-left:1px; }
+
+  @media(max-width:700px) {
+    .people-table { font-size:0.65rem; }
   }
 
   /* ── STAT CARDS ── */
@@ -668,9 +737,8 @@
     <!-- TABS -->
     <div class="tabs">
       <button class="tab active" onclick="switchTab('vip')">VIP Reservations</button>
-      <button class="tab" onclick="switchTab('tickets')">Tickets</button>
+      <button class="tab" onclick="switchTab('tickets')">People</button>
       <button class="tab" onclick="switchTab('compentries')">Entries</button>
-      <button class="tab" onclick="switchTab('meals')">Meal Packages</button>
       <button class="tab" onclick="switchTab('documents')">Documents</button>
       <button class="tab" onclick="switchTab('summary')">Summary</button>
     </div>
@@ -713,46 +781,27 @@
       </div>
     </div>
 
-    <!-- TICKETS TAB -->
+    <!-- PEOPLE TAB (merged tickets + meals) -->
     <div class="tab-content" id="tab-tickets">
       <div class="section-card">
         <div class="section-header">
-          <div class="section-title">Session Tickets &amp; Welcome Gift</div>
+          <div class="section-title">ALC People — Sessions &amp; Meals</div>
           <div style="display:flex;gap:0.5rem">
             <button class="btn btn-sm btn-success" onclick="saveAll()">Save Data</button>
-            <button class="btn btn-sm btn-outline" onclick="addTicketRow()">+ Add Row</button>
+            <button class="btn btn-sm btn-outline" onclick="addPersonRow()">+ Add Person</button>
           </div>
         </div>
-        <div class="section-body" style="overflow-x:auto">
-          <table class="data-table" id="ticketsTable">
-            <thead>
-              <tr>
-                <th class="row-num">#</th>
-                <th>Name</th>
-                <th>Pro/Am</th>
-                <th>Newcomer?</th>
-                <th>Comp Fee<br><span style="color:var(--muted);font-size:0.55rem">$175</span></th>
-                <th>Thu Mat<br><span style="color:var(--muted);font-size:0.55rem">$15</span></th>
-                <th>Thu Eve<br><span style="color:var(--muted);font-size:0.55rem">$20</span></th>
-                <th>Fri Mat<br><span style="color:var(--muted);font-size:0.55rem">$15</span></th>
-                <th>Fri Eve<br><span style="color:var(--muted);font-size:0.55rem">$25</span></th>
-                <th>Sat Mat<br><span style="color:var(--muted);font-size:0.55rem">$15</span></th>
-                <th>Welcome Gift<br><span style="color:var(--muted);font-size:0.55rem">$48</span></th>
-                <th>VIP/ALC</th>
-                <th>Total</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="ticketsBody"></tbody>
-            <tfoot>
-              <tr class="total-row">
-                <td colspan="11" style="text-align:right;font-size:0.65rem;letter-spacing:0.1em">TOTAL TICKET FEES</td>
-                <td id="ticketsTotalVal" colspan="2">$0.00</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-          <button class="add-row-btn" onclick="addTicketRow()">+ Add Person</button>
+        <div class="section-body">
+          <p style="font-size:0.65rem;color:var(--muted);margin-bottom:1rem;letter-spacing:0.04em">Enter each person once — session tickets and meal packages expand below each name.</p>
+          <div id="peopleList"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+            <button class="add-row-btn" style="margin:0" onclick="addPersonRow()">+ Add Person</button>
+            <div style="font-size:0.7rem;color:var(--muted)">
+              Tickets: <strong id="peopleTotalTickets">$0.00</strong> &nbsp;·&nbsp;
+              Meals: <strong id="peopleTotalMeals">$0.00</strong> &nbsp;·&nbsp;
+              Combined: <strong id="peopleTotalCombined" style="color:var(--gold)">$0.00</strong>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -814,49 +863,6 @@
         </div><!-- end entryDetailTable -->
       </div>
     </div>
-    <div class="tab-content" id="tab-meals">
-      <div class="section-card">
-        <div class="section-header">
-          <div class="section-title">Meal Packages — Professional / Amateur</div>
-          <div style="display:flex;gap:0.5rem">
-            <button class="btn btn-sm btn-success" onclick="saveAll()">Save Data</button>
-            <button class="btn btn-sm btn-outline" onclick="addMealRow()">+ Add Row</button>
-          </div>
-        </div>
-        <div class="section-body" style="overflow-x:auto">
-          <table class="data-table" id="mealsTable">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>Pro/Am</th>
-                <th>Thu Dinner<br><span style="color:var(--muted);font-size:0.55rem">$82</span></th>
-                <th>Fri Breakfast<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-                <th>Fri Lunch<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-                <th>Fri Dinner<br><span style="color:var(--muted);font-size:0.55rem">$82</span></th>
-                <th>Sat Breakfast<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-                <th>Sat Lunch<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-                <th>Sat Banquet Dinner<br><span style="color:var(--muted);font-size:0.55rem">$140 / Kids $45</span></th>
-                <th>Dinner Choice</th>
-                <th>Age 12 &amp; Under?</th>
-                <th>Allergy?</th>
-                <th>Total</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="mealsBody"></tbody>
-            <tfoot>
-              <tr class="total-row">
-                <td colspan="12" style="text-align:right;font-size:0.65rem;letter-spacing:0.1em">TOTAL MEAL REVENUE</td>
-                <td id="mealsTotalVal" colspan="2">$0.00</td>
-              </tr>
-            </tfoot>
-          </table>
-          <button class="add-row-btn" onclick="addMealRow()">+ Add Person</button>
-        </div>
-      </div>
-    </div>
-
     <!-- DOCUMENTS TAB -->
     <div class="tab-content" id="tab-documents">
       <div class="section-card">
@@ -920,6 +926,7 @@
       <button class="tab" onclick="switchOrgTab('compare')">Compare Comps</button>
       <button class="tab" onclick="switchOrgTab('admin')">Admin</button>
       <button class="tab" onclick="switchOrgTab('checks')">🏆 Checks</button>
+      <button class="tab" onclick="switchOrgTab('setup')">🪑 Room Setup</button>
       <button class="tab" onclick="switchOrgTab('manage')">✏️ Manage Studio</button>
     </div>
 
@@ -954,6 +961,10 @@
 
     <div class="tab-content" id="org-tab-checks">
       <div id="checksContent"></div>
+    </div>
+
+    <div class="tab-content" id="org-tab-setup">
+      <div id="setupContent"></div>
     </div>
 
     <div class="tab-content" id="org-tab-admin">
@@ -1231,6 +1242,7 @@ function switchOrgTab(name) {
   if (name === 'compare') renderCompareTab();
   if (name === 'admin') { renderAdminTab(); renderPaymentsTable(); }
   if (name === 'checks') renderChecksTab();
+  if (name === 'setup') renderSetupTab();
   if (name === 'manage') {
     // Populate studio dropdown with all studios + visiting studios for current comp
     const comp = document.getElementById('orgCompSelect').value || getDefaultComp();
@@ -1318,10 +1330,9 @@ function loadStudioData() {
   currentComp = document.getElementById('studioCompSelect').value;
   const d = getStudioData(currentStudio, currentComp);
   renderVipTable(d.vip);
-  renderTicketsTable(d.tickets);
+  renderPeopleList(d);
   renderCompEntriesTable(d.compEntries);
   initEntryMode();
-  renderMealsTable(d.meals);
   // Show balance popup only for actual studio logins (not organizer managing)
   if (currentUser && currentUser.type === 'studio') {
     setTimeout(() => showBalancePopupIfOwed(currentStudio, currentComp), 800);
@@ -1393,6 +1404,243 @@ function calcTicketFee(r) {
   ['thuMat','thuEve','friMat','friEve','satMat'].forEach(s => { if (r[s]) fee += SESSION_PRICES[s]; });
   if (r.gift) fee += GIFT_PRICE;
   return fee;
+}
+
+// ── PEOPLE LIST (merged tickets + meals) ──
+function renderPeopleList(d) {
+  const el = document.getElementById('peopleList');
+  if (!el) return;
+
+  // Sync meals array length to tickets
+  d.tickets.forEach((t, i) => {
+    if (!d.meals[i]) d.meals[i] = { name:t.name, proam:t.proam||'', thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false };
+    else if (!d.meals[i].name) d.meals[i].name = t.name;
+  });
+
+  if (!d.tickets.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:0.75rem;padding:0.5rem 0">No people added yet. Click + Add Person to start.</p>';
+    updatePeopleTotals(d);
+    return;
+  }
+
+  const chk = (i, key, section, label, price) => {
+    const t = d.tickets[i], m = d.meals[i]||{};
+    const val = section==='t' ? t[key] : m[key];
+    const fn  = section==='t' ? `updatePersonTicket(${i},'${key}',this.checked)` : `updatePersonMeal(${i},'${key}',this.checked)`;
+    return `<label class="${val?'checked':''}">
+      <input type="checkbox" ${val?'checked':''} onchange="${fn}"/>
+      ${label}<span class="price-muted">$${price}</span>
+    </label>`;
+  };
+
+  const rows = d.tickets.map((t, i) => {
+    const m = d.meals[i] || {};
+    const isVIP = t.vipAlc === 'VIP';
+    const ticketFee = isVIP ? 0 : calcTicketFee(t);
+    const mealFee   = isVIP ? 0 : calcMealFee(m);
+    const total     = ticketFee + mealFee;
+    const mealMissing = !isVIP && m.satCocktail && !m.childrenMeal && !m.satMealChoice;
+
+    const sessionCell = isVIP
+      ? `<td style="padding:6px 8px"><span class="vip-pkg-badge">FULL PACKAGE ✓</span></td>`
+      : `<td><div class="pchk">
+          ${chk(i,'compFee','t','Comp Fee ','175')}
+          ${chk(i,'thuMat','t','Thu Mat ','15')}
+          ${chk(i,'thuEve','t','Thu Eve ','20')}
+          ${chk(i,'friMat','t','Fri Mat ','15')}
+          ${chk(i,'friEve','t','Fri Eve ','25')}
+          ${chk(i,'satMat','t','Sat Mat ','15')}
+          ${chk(i,'gift','t','Gift ','48')}
+        </div></td>`;
+
+    const mealCell = isVIP
+      ? `<td style="padding:6px 8px">
+          <span class="vip-pkg-badge">ALL MEALS ✓</span>
+          <div style="margin-top:4px">
+            <select class="dinner-sel" onchange="updatePersonMealChoice(${i},this.value)">
+              <option value="">— Dinner choice —</option>
+              <option ${m.satMealChoice==='Beef'?'selected':''}>Beef</option>
+              <option ${m.satMealChoice==='Fish'?'selected':''}>Fish</option>
+              <option ${m.satMealChoice==='Chicken'?'selected':''}>Chicken</option>
+              <option ${m.satMealChoice==='Vegetarian'?'selected':''}>Vegetarian</option>
+            </select>
+            <input type="text" class="allergy-inp" value="${m.allergy||''}" placeholder="Allergy / GF?" onchange="updatePersonAllergy(${i},this.value)"/>
+          </div>
+        </td>`
+      : `<td><div class="pchk">
+          ${chk(i,'thuDinner','m','Thu Dinner ','82')}
+          ${chk(i,'friBrk','m','Fri Brk ','52')}
+          ${chk(i,'friLunch','m','Fri Lunch ','52')}
+          ${chk(i,'friDinner','m','Fri Dinner ','82')}
+          ${chk(i,'satBrk','m','Sat Brk ','52')}
+          ${chk(i,'satLunch','m','Sat Lunch ','52')}
+          ${chk(i,'satCocktail','m','Sat Banquet ','140')}
+          ${chk(i,'childrenMeal','m','Kids ','45')}
+          ${m.satCocktail ? `<select class="dinner-sel ${mealMissing?'missing':''}" onchange="updatePersonMealChoice(${i},this.value)">
+            <option value="">— Dinner choice —</option>
+            <option ${m.satMealChoice==='Beef'?'selected':''}>Beef</option>
+            <option ${m.satMealChoice==='Fish'?'selected':''}>Fish</option>
+            <option ${m.satMealChoice==='Chicken'?'selected':''}>Chicken</option>
+            <option ${m.satMealChoice==='Vegetarian'?'selected':''}>Vegetarian</option>
+          </select>${mealMissing?'<span style="color:var(--red);font-size:0.6rem">⚠ needed</span>':''}` : ''}
+          <input type="text" class="allergy-inp" value="${m.allergy||''}" placeholder="Allergy / GF?" onchange="updatePersonAllergy(${i},this.value)"/>
+        </div></td>`;
+
+    return `<tr class="${isVIP?'vip-locked':''}">
+      <td style="min-width:140px"><input type="text" value="${t.name||''}" placeholder="Full name" onchange="updatePersonName(${i},this.value)"/></td>
+      <td style="min-width:90px">
+        <select onchange="updatePersonTicket(${i},'proam',this.value)">
+          <option value="">—</option>
+          <option ${t.proam==='Amateur'?'selected':''}>Amateur</option>
+          <option ${t.proam==='Professional'?'selected':''}>Professional</option>
+        </select>
+      </td>
+      <td style="min-width:70px">
+        <select onchange="updatePersonTicket(${i},'vipAlc',this.value)">
+          <option value="">—</option>
+          <option ${t.vipAlc==='VIP'?'selected':''}>VIP</option>
+          <option ${t.vipAlc==='ALC'?'selected':''}>ALC</option>
+        </select>
+      </td>
+      <td style="text-align:center;padding:0 6px">
+        <label style="display:flex;align-items:center;gap:3px;font-size:0.65rem;cursor:pointer;justify-content:center;color:${t.firstTimer?'var(--gold)':'var(--muted)'}">
+          <input type="checkbox" ${t.firstTimer?'checked':''} onchange="updatePersonTicket(${i},'firstTimer',this.checked)" style="accent-color:var(--gold)"/>
+          ★ New
+        </label>
+      </td>
+      ${sessionCell}
+      ${mealCell}
+      <td class="p-total" id="personTotal${i}">${isVIP?'<span style="font-size:0.6rem;color:var(--muted)">in pkg</span>':'$'+total.toFixed(2)}</td>
+      <td><button class="p-remove" onclick="removePersonRow(${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <table class="people-table">
+      <thead><tr>
+        <th>Name</th>
+        <th>Pro/Am</th>
+        <th>VIP/ALC</th>
+        <th style="text-align:center">New</th>
+        <th>Sessions &amp; Purchases</th>
+        <th>Meals</th>
+        <th>Total</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  updatePeopleTotals(d);
+}
+
+function updatePersonName(i, val) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (d.tickets[i]) d.tickets[i].name = val;
+  if (d.meals[i])   d.meals[i].name   = val;
+  triggerAutoSave();
+}
+
+function updatePersonTicket(i, field, val) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.tickets[i]) return;
+  d.tickets[i][field] = val;
+
+  // When VIP/ALC changes — auto-check or clear everything
+  if (field === 'vipAlc') {
+    if (val === 'VIP') {
+      // Auto-check all sessions and meals
+      d.tickets[i].thuMat = true;
+      d.tickets[i].thuEve = true;
+      d.tickets[i].friMat = true;
+      d.tickets[i].friEve = true;
+      d.tickets[i].satMat = true;
+      d.tickets[i].gift   = true;
+      d.tickets[i].compFee = false; // VIPs don't pay comp fee
+      if (!d.meals[i]) d.meals[i] = {};
+      d.meals[i].thuDinner   = true;
+      d.meals[i].friBrk      = true;
+      d.meals[i].friLunch    = true;
+      d.meals[i].friDinner   = true;
+      d.meals[i].satBrk      = true;
+      d.meals[i].satLunch    = true;
+      d.meals[i].satCocktail = true;
+      d.meals[i].childrenMeal = false;
+    } else if (val === 'ALC') {
+      // Clear all sessions and meals when switching back to ALC
+      ['thuMat','thuEve','friMat','friEve','satMat','gift','compFee'].forEach(k => d.tickets[i][k] = false);
+      if (d.meals[i]) {
+        ['thuDinner','friBrk','friLunch','friDinner','satBrk','satLunch','satCocktail','childrenMeal'].forEach(k => d.meals[i][k] = false);
+      }
+    }
+  }
+
+  refreshPersonCard(i, d);
+  triggerAutoSave();
+}
+
+function updatePersonMeal(i, field, val) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.meals[i]) d.meals[i] = {};
+  d.meals[i][field] = val;
+  refreshPersonCard(i, d);
+  triggerAutoSave();
+}
+
+function updatePersonMealChoice(i, val) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.meals[i]) d.meals[i] = {};
+  d.meals[i].satMealChoice = val;
+  checkMealChoice(i);
+  updatePeopleTotals(d);
+  triggerAutoSave();
+}
+
+function updatePersonAllergy(i, val) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.meals[i]) d.meals[i] = {};
+  d.meals[i].allergy = val;
+  triggerAutoSave();
+}
+
+function refreshPersonCard(i, d) {
+  // Re-render just this card
+  renderPeopleList(d);
+}
+
+function updatePeopleTotals(d) {
+  const ticketTotal = (d.tickets||[]).reduce((s,r)=>s+calcTicketFee(r),0);
+  const mealTotal   = (d.meals||[]).reduce((s,r)=>s+calcMealFee(r),0);
+  const el1 = document.getElementById('peopleTotalTickets');
+  const el2 = document.getElementById('peopleTotalMeals');
+  const el3 = document.getElementById('peopleTotalCombined');
+  if (el1) el1.textContent = '$'+ticketTotal.toFixed(2);
+  if (el2) el2.textContent = '$'+mealTotal.toFixed(2);
+  if (el3) el3.textContent = '$'+(ticketTotal+mealTotal).toFixed(2);
+}
+
+function addPersonRow() {
+  const d = getStudioData(currentStudio, currentComp);
+  d.tickets.push({ name:'', proam:'', vipAlc:'ALC', firstTimer:false, compFee:false, thuMat:false, thuEve:false, friMat:false, friEve:false, satMat:false, gift:false });
+  d.meals.push({   name:'', proam:'', thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false });
+  renderPeopleList(d);
+  triggerAutoSave();
+  // Focus the new name input
+  setTimeout(() => {
+    const cards = document.querySelectorAll('.person-card');
+    if (cards.length) {
+      const last = cards[cards.length-1];
+      const inp = last.querySelector('input[type="text"]');
+      if (inp) inp.focus();
+    }
+  }, 50);
+}
+
+function removePersonRow(i) {
+  const d = getStudioData(currentStudio, currentComp);
+  d.tickets.splice(i, 1);
+  d.meals.splice(i, 1);
+  renderPeopleList(d);
+  triggerAutoSave();
 }
 
 function renderTicketsTable(rows) {
@@ -2052,7 +2300,97 @@ async function renderOverview() {
   });
   const totalDinners = Object.values(dc).reduce((s,c)=>s+c,0);
 
+  // Sat dinner count (VIP + ALC satCocktail)
+  const allStudiosForComp = getAllStudiosForComp(comp);
+  let totalSatDiners = 0;
+  let missingMealChoices = 0;
+  const studioBreakdown = [];
+
+  allStudiosForComp.forEach(s => {
+    const d = getStudioData(s, comp);
+    // meals[] now has VIP rows auto-checked — count satCocktail directly, no vipCount addition
+    const diners  = d.meals.filter(r=>r.satCocktail).length;
+    const missing = d.vip.filter(r=>r.name && !r.meal).length +
+                    d.meals.filter(r=>r.satCocktail && !r.childrenMeal && !r.satMealChoice).length;
+    if (diners > 0) {
+      totalSatDiners += diners;
+      missingMealChoices += missing;
+      const tables = assignTables(diners);
+      studioBreakdown.push({ studio:s, diners, tables, missing });
+    }
+  });
+
+  const totalSatTables = studioBreakdown.reduce((s,d)=>s+d.tables.length,0);
+
   document.getElementById('overviewContent').innerHTML = `
+
+    <!-- LIVE DINNER TRACKER -->
+    <div class="section-card fade-up" style="border-top:3px solid var(--gold);margin-bottom:1rem">
+      <div class="section-header">
+        <div class="section-title">🍽️ Saturday Banquet — Live Count</div>
+        <span class="badge badge-gold">${totalSatDiners} guests · ${totalSatTables} tables</span>
+      </div>
+      <div class="section-body">
+        <div class="stats-grid" style="margin-bottom:1rem">
+          <div class="stat-card" style="border-top:3px solid #c9a84c">
+            <div class="stat-label">Total Dinner Guests</div>
+            <div class="stat-value" style="font-size:2.2rem">${totalSatDiners}</div>
+            <div class="stat-sub">VIP + ALC sat banquet</div>
+          </div>
+          <div class="stat-card" style="border-top:3px solid #4a90d9">
+            <div class="stat-label">Tables Needed</div>
+            <div class="stat-value" style="font-size:2.2rem">${totalSatTables}</div>
+            <div class="stat-sub">Auto-calculated (max 10/table)</div>
+          </div>
+          <div class="stat-card" style="border-top:3px solid ${missingMealChoices>0?'#e74c3c':'#27ae60'}">
+            <div class="stat-label">Missing Dinner Choices</div>
+            <div class="stat-value" style="font-size:2.2rem;color:${missingMealChoices>0?'#e74c3c':'var(--green)'}">
+              ${missingMealChoices}
+            </div>
+            <div class="stat-sub">${missingMealChoices>0?'⚠ Still need selection':'✓ All choices in'}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Dinner Choice Breakdown</div>
+            <div style="margin-top:0.3rem">
+              ${Object.entries(dc).filter(([,c])=>c>0).map(([m,c])=>`
+                <div style="display:flex;justify-content:space-between;font-size:0.72rem;padding:2px 0;border-bottom:1px solid var(--border)">
+                  <span>${m}</span><strong>${c}</strong>
+                </div>`).join('')}
+              ${Object.values(dc).every(c=>c===0)?'<div style="color:var(--muted);font-size:0.7rem">No choices entered yet</div>':''}
+            </div>
+          </div>
+        </div>
+
+        <!-- Per-studio dinner breakdown -->
+        <table class="data-table">
+          <thead><tr>
+            <th>Studio</th>
+            <th style="text-align:center">Dinner Guests</th>
+            <th style="text-align:center">Tables</th>
+            <th>Split</th>
+            <th style="text-align:center">Missing Choice</th>
+          </tr></thead>
+          <tbody>
+            ${studioBreakdown.sort((a,b)=>b.diners-a.diners).map(s=>`
+            <tr>
+              <td style="color:var(--gold-light);font-family:'Cormorant Garamond',serif;font-weight:600">${s.studio}</td>
+              <td style="text-align:center;font-weight:700">${s.diners}</td>
+              <td style="text-align:center">${s.tables.length}</td>
+              <td style="font-size:0.68rem;color:var(--muted)">${s.tables.map(t=>`${t}-top`).join(', ')}</td>
+              <td style="text-align:center">${s.missing>0?`<span style="color:#e74c3c;font-weight:700">⚠ ${s.missing}</span>`:'<span style="color:var(--green)">✓</span>'}</td>
+            </tr>`).join('')}
+          </tbody>
+          <tfoot><tr class="total-row">
+            <td>TOTAL</td>
+            <td style="text-align:center">${totalSatDiners}</td>
+            <td style="text-align:center">${totalSatTables}</td>
+            <td></td>
+            <td style="text-align:center;color:${missingMealChoices>0?'#e74c3c':'var(--green)'}">${missingMealChoices>0?`⚠ ${missingMealChoices} missing`:'✓ All in'}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>
+
     <div class="stats-grid fade-up">
       <div class="stat-card"><div class="stat-label">Total VIPs</div><div class="stat-value">${totalVip}</div><div class="stat-sub">$${totalVipRev.toLocaleString()} revenue</div></div>
       <div class="stat-card"><div class="stat-label">Ticket Holders</div><div class="stat-value">${totalTickets}</div><div class="stat-sub">$${Math.round(totalTicketRev).toLocaleString()} in tickets</div></div>
@@ -2185,11 +2523,9 @@ function renderMealsTab() {
   const studioRows = allStudios.map(s => {
     const d = getStudioData(s, comp);
     const row = { studio: s };
-    const vipCount = d.vip.filter(r=>r.name).length;
     mealKeys.forEach(m => {
-      // VIPs get all meals included in their package
-      const alcCount = d.meals.filter(r=>r[m.key]).length;
-      const count = alcCount + vipCount;
+      // meals[] now includes VIP rows with all boxes auto-checked — just count directly
+      const count = d.meals.filter(r=>r[m.key]).length;
       mealTotals[m.label] += count;
       row[m.label] = count;
     });
@@ -2306,9 +2642,7 @@ function renderCompareTab() {
       const allStudios = getAllStudiosForComp(c);
       return allStudios.reduce((sum, s) => {
         const d = getStudioData(s, c);
-        const vipCount = d.vip.filter(r=>r.name).length;
-        const alcCount = d.meals.filter(r=>r[mk.key]).length;
-        return sum + alcCount + vipCount;
+        return sum + d.meals.filter(r=>r[mk.key]).length;
       }, 0);
     });
     return { label: mk.label, counts };
@@ -5450,118 +5784,685 @@ async function generateStudioSummaryPDF(studio, comp) {
 async function generateCheckinSheetPDF(comp) {
   const allStudios = getAllStudiosForComp(comp);
   const today = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const sessionLabels = [
-    {key:'thuMat', label:'Thu\nMat'},
-    {key:'thuEve', label:'Thu\nEve'},
-    {key:'friMat', label:'Fri\nMat'},
-    {key:'friEve', label:'Fri\nEve'},
-    {key:'satMat', label:'Sat\nMat'},
-  ];
+  const sessionKeys = ['thuMat','thuEve','friMat','friEve','satMat'];
+  const sessionLabels = ['Thu Mat','Thu Eve','Fri Mat','Fri Eve','Sat Mat'];
 
-  let bodyHTML = '';
-
+  // Build full people list with unique IDs
+  let allRows = [];
   for (const studio of allStudios) {
     const d = getStudioData(studio, comp);
     const vips = d.vip.filter(r=>r.name);
     const alcs = d.tickets.filter(r=>r.name);
-    if (vips.length === 0 && alcs.length === 0) continue;
+    if (!vips.length && !alcs.length) continue;
+    vips.forEach((r,i) => allRows.push({
+      id: `${studio}::vip::${i}`, studio, name:r.name,
+      type:'VIP', proam:r.proam||'', firstTimer:false, gift:true,
+      sessions: sessionKeys.map((_,si)=>({label:sessionLabels[si], has:true})),
+      dinner: r.meal||''
+    }));
+    alcs.forEach((r,i) => allRows.push({
+      id: `${studio}::alc::${i}`, studio, name:r.name,
+      type:'ALC', proam:r.proam||'', firstTimer:!!r.firstTimer, gift:!!r.gift,
+      sessions: sessionKeys.map((k,si)=>({label:sessionLabels[si], has:!!r[k]})),
+      dinner: ''
+    }));
+  }
 
-    const vipRows = vips.map(r=>`
-      <tr class="vip-row">
-        <td class="name-col"><strong>${r.name}</strong></td>
-        <td class="type-col"><span class="badge-vip">VIP</span></td>
-        <td>${r.proam||''}</td>
-        <td class="new-col">—</td>
-        <td class="center"><span class="check-gift">✓</span></td>
-        <td class="center">All</td>
-        <td class="center">—</td>
-        <td class="center">—</td>
-        <td class="center">—</td>
-        <td class="center">—</td>
-        <td class="center">—</td>
-        <td class="sig-col"></td>
-      </tr>`).join('');
+  // Group by studio for display
+  const byStudio = {};
+  allRows.forEach(r => {
+    if (!byStudio[r.studio]) byStudio[r.studio] = [];
+    byStudio[r.studio].push(r);
+  });
 
-    const alcRows = alcs.map(r=>{
-      const sessCells = sessionLabels.map(s=>
-        `<td class="center">${r[s.key]?'<span class="has-sess">✓</span>':'—'}</td>`
+  // Build row HTML
+  const rowsHTML = Object.entries(byStudio).map(([studio, people]) => {
+    const vipCount = people.filter(p=>p.type==='VIP').length;
+    const alcCount = people.filter(p=>p.type==='ALC').length;
+    const personRows = people.map(p => {
+      const sessCells = p.sessions.map(s =>
+        `<td class="center sess">${s.has ? '✓' : '—'}</td>`
       ).join('');
-      return `<tr>
-        <td class="name-col">${r.name}</td>
-        <td class="type-col"><span class="badge-alc">ALC</span></td>
-        <td>${r.proam||''}</td>
-        <td class="new-col">${r.firstTimer?'<span class="new-flag">★ NEW</span>':'—'}</td>
-        <td class="center">${r.gift?'<span class="check-gift">✓</span>':'—'}</td>
+      return `<tr class="person-row ${p.type==='VIP'?'vip-row':''}" data-id="${p.id}" onclick="toggleCheckin(this)">
+        <td class="done-col"><span class="done-mark">✓</span></td>
+        <td class="name-col">
+          <strong>${p.name}</strong>
+          ${p.firstTimer ? '<span class="new-flag">★ NEW</span>' : ''}
+        </td>
+        <td class="center"><span class="badge-${p.type.toLowerCase()}">${p.type}</span></td>
+        <td class="center role-col">${p.proam}</td>
+        <td class="center">${p.gift ? '<span class="gift-mark">🎁</span>' : '—'}</td>
         ${sessCells}
-        <td class="sig-col"></td>
+        <td class="center">${p.dinner ? '<span class="dinner-mark">🍽</span>' : '—'}</td>
+        <td class="notes-col"></td>
       </tr>`;
     }).join('');
 
-    bodyHTML += `
+    return `
       <div class="studio-block">
-        <div class="studio-header">${studio} <span class="studio-count">${vips.length} VIP · ${alcs.length} ALC · ${vips.length+alcs.length} total</span></div>
+        <div class="studio-header">
+          <span>${studio}</span>
+          <span class="studio-count">${vipCount} VIP · ${alcCount} ALC · ${people.length} total</span>
+          <span class="studio-progress" id="prog_${studio.replace(/\s/g,'_')}">0 / ${people.length} checked in</span>
+        </div>
         <table>
           <thead><tr>
+            <th class="done-col">✓</th>
             <th class="name-col">Name</th>
-            <th class="type-col">Type</th>
-            <th>Role</th>
-            <th class="new-col">New?</th>
+            <th class="center">Type</th>
+            <th class="center role-col">Role</th>
             <th class="center">Gift</th>
             <th class="center">Thu<br>Mat</th>
             <th class="center">Thu<br>Eve</th>
             <th class="center">Fri<br>Mat</th>
             <th class="center">Fri<br>Eve</th>
             <th class="center">Sat<br>Mat</th>
-            <th class="center">Dinner<br>Ticket</th>
-            <th class="sig-col">Initials</th>
+            <th class="center">Dinner</th>
+            <th class="notes-col">Notes</th>
           </tr></thead>
-          <tbody>${vipRows}${alcRows}</tbody>
+          <tbody>${personRows}</tbody>
         </table>
       </div>`;
-  }
+  }).join('');
+
+  const totalPeople = allRows.length;
+  const storageKey = `checkin::${comp}`;
 
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head>
-  <title>Check-In Sheet — ${comp}</title>
+  <title>Check-In — ${comp}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:Arial,sans-serif;font-size:10px;color:#111;padding:.5rem .75rem}
-    .page-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.75rem;border-bottom:2px solid #c9a84c;padding-bottom:.35rem}
-    .page-header h1{font-family:Georgia,serif;font-size:16px;color:#8B6914}
-    .page-header span{font-size:9px;color:#999}
-    .studio-block{margin-bottom:1rem;page-break-inside:avoid}
-    .studio-header{background:#8B6914;color:#fff;font-weight:700;font-size:11px;padding:4px 8px;border-radius:4px 4px 0 0;display:flex;justify-content:space-between;align-items:center}
-    .studio-count{font-size:9px;font-weight:400;opacity:.85}
-    table{width:100%;border-collapse:collapse;font-size:9.5px}
-    th{background:#f5f0e8;padding:4px 5px;text-align:center;font-size:8px;letter-spacing:.05em;text-transform:uppercase;color:#777;border:1px solid #ddd;line-height:1.2}
+    body{font-family:Arial,sans-serif;font-size:12px;color:#111;background:#f9f7f2}
+    .top-bar{background:#8B6914;color:#fff;padding:.6rem 1rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+    .top-bar h1{font-family:Georgia,serif;font-size:15px}
+    .top-bar .counter{font-size:12px;opacity:.85}
+    .progress-bar{height:4px;background:#c9a84c;position:sticky;top:42px;z-index:99}
+    .progress-fill{height:100%;background:#fff;width:0%;transition:width .3s}
+    .controls{padding:.5rem 1rem;background:#fff;border-bottom:1px solid #ddd;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+    .controls button{padding:.3rem .75rem;border:1px solid #c9a84c;background:#fff;border-radius:4px;cursor:pointer;font-size:11px;color:#8B6914;font-weight:600}
+    .controls button:hover{background:#faf5e8}
+    .controls .filter-label{font-size:11px;color:#888;margin-left:.5rem}
+    input[type=search]{padding:.3rem .6rem;border:1px solid #ddd;border-radius:4px;font-size:11px;width:160px}
+    .studio-block{margin:.75rem 1rem .5rem;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+    .studio-header{background:#8B6914;color:#fff;font-weight:700;font-size:12px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center}
+    .studio-count{font-size:10px;font-weight:400;opacity:.8}
+    .studio-progress{font-size:10px;background:rgba(255,255,255,.2);padding:1px 6px;border-radius:10px}
+    table{width:100%;border-collapse:collapse;background:#fff;font-size:11px}
+    th{background:#f5f0e8;padding:5px 6px;text-align:center;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:#888;border-bottom:2px solid #ddd}
     th.name-col{text-align:left}
-    td{padding:4px 5px;border:1px solid #eee;vertical-align:middle}
-    .name-col{min-width:130px;max-width:160px}
-    .type-col{width:40px;text-align:center}
-    .new-col{width:45px;text-align:center}
+    td{padding:7px 6px;border-bottom:1px solid #f0ebe0;vertical-align:middle;transition:background .15s}
+    .name-col{min-width:130px}
+    .done-col{width:28px;text-align:center}
+    .role-col{width:70px}
+    .notes-col{width:80px;min-width:60px}
     .center{text-align:center}
-    .sig-col{width:55px}
-    .vip-row{background:#fffbf0}
-    .badge-vip{background:#8B6914;color:#fff;font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.05em}
-    .badge-alc{background:#555;color:#fff;font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.05em}
-    .new-flag{color:#e67e22;font-weight:700;font-size:9px}
-    .check-gift{color:#27ae60;font-weight:700}
-    .has-sess{color:#2980b9;font-weight:700}
+    .person-row{cursor:pointer;user-select:none}
+    .person-row:hover{background:#fdfbf5 !important}
+    .person-row:active{transform:scale(0.995)}
+
+    /* CHECKED IN state */
+    .person-row.checked-in{background:#e8f5e9 !important}
+    .person-row.checked-in td{color:#555}
+    .person-row.checked-in .name-col strong{text-decoration:line-through;color:#888}
+    .done-mark{opacity:0;color:#27ae60;font-weight:700;font-size:14px;transition:opacity .2s}
+    .person-row.checked-in .done-mark{opacity:1}
+
+    /* VIP base style (overridden by checked-in) */
+    .vip-row:not(.checked-in){background:#fffbf0}
+
+    .badge-vip{background:#8B6914;color:#fff;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px}
+    .badge-alc{background:#555;color:#fff;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px}
+    .new-flag{display:inline-block;color:#e67e22;font-weight:700;font-size:9px;margin-left:4px}
+    .gift-mark{font-size:13px}
+    .dinner-mark{font-size:13px}
+
+    /* Filter states */
+    .person-row.hidden-row{display:none}
+
     @media print{
-      body{padding:.25rem .5rem}
-      .studio-block{page-break-inside:avoid}
+      .top-bar,.controls,.progress-bar{display:none}
+      .studio-block{box-shadow:none;margin:.3rem 0}
+      body{background:#fff;font-size:10px}
+      .person-row.checked-in{background:#e8f5e9 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     }
   </style>
 </head><body>
-  <div class="page-header">
-    <h1>${comp} — Check-In Sheet</h1>
-    <span>Printed ${today} &nbsp;·&nbsp; For staff use only</span>
+
+<div class="top-bar">
+  <h1>📋 ${comp} — Check-In</h1>
+  <span class="counter" id="topCounter">0 / ${totalPeople} checked in</span>
+</div>
+<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+<div class="controls">
+  <button onclick="resetAll()">🔄 Reset All</button>
+  <button onclick="window.print()">🖨️ Print</button>
+  <input type="search" placeholder="Search name..." oninput="filterRows(this.value)" id="searchBox"/>
+  <span class="filter-label">Show:</span>
+  <button onclick="filterStatus('all')" id="btn-all" style="background:#faf5e8">All</button>
+  <button onclick="filterStatus('pending')" id="btn-pending">Pending</button>
+  <button onclick="filterStatus('done')" id="btn-done">Checked In</button>
+</div>
+
+${rowsHTML}
+
+<script>
+  const STORAGE_KEY = '${storageKey}';
+  const totalPeople = ${totalPeople};
+  let checkedIn = new Set();
+
+  // Load saved state
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) checkedIn = new Set(JSON.parse(saved));
+  } catch(e) {}
+
+  function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...checkedIn]));
+  }
+
+  function applyState() {
+    document.querySelectorAll('.person-row').forEach(tr => {
+      const id = tr.dataset.id;
+      tr.classList.toggle('checked-in', checkedIn.has(id));
+    });
+    updateCounters();
+  }
+
+  function toggleCheckin(tr) {
+    const id = tr.dataset.id;
+    if (checkedIn.has(id)) {
+      checkedIn.delete(id);
+    } else {
+      checkedIn.add(id);
+    }
+    tr.classList.toggle('checked-in', checkedIn.has(id));
+    saveState();
+    updateCounters();
+  }
+
+  function updateCounters() {
+    const done = checkedIn.size;
+    document.getElementById('topCounter').textContent = done + ' / ' + totalPeople + ' checked in';
+    document.getElementById('progressFill').style.width = (done/totalPeople*100) + '%';
+
+    // Per-studio progress
+    document.querySelectorAll('.studio-block').forEach(block => {
+      const rows = block.querySelectorAll('.person-row');
+      const studioDone = [...rows].filter(r=>checkedIn.has(r.dataset.id)).length;
+      const studioName = block.querySelector('.studio-header span').textContent.trim().replace(/\\s/g,'_');
+      const prog = document.getElementById('prog_' + studioName);
+      if (prog) prog.textContent = studioDone + ' / ' + rows.length + ' checked in';
+    });
+  }
+
+  function resetAll() {
+    if (!confirm('Reset all check-ins to zero?')) return;
+    checkedIn.clear();
+    saveState();
+    applyState();
+  }
+
+  let currentFilter = 'all';
+  function filterStatus(status) {
+    currentFilter = status;
+    applyFilters();
+    ['all','pending','done'].forEach(s => {
+      document.getElementById('btn-'+s).style.background = s===status ? '#faf5e8' : '#fff';
+    });
+  }
+
+  function filterRows(query) { applyFilters(query); }
+
+  function applyFilters(query) {
+    query = (query || document.getElementById('searchBox').value).toLowerCase();
+    document.querySelectorAll('.person-row').forEach(tr => {
+      const nameMatch = !query || tr.querySelector('.name-col').textContent.toLowerCase().includes(query);
+      const isDone = checkedIn.has(tr.dataset.id);
+      const statusMatch = currentFilter === 'all' ||
+        (currentFilter === 'done' && isDone) ||
+        (currentFilter === 'pending' && !isDone);
+      tr.classList.toggle('hidden-row', !nameMatch || !statusMatch);
+    });
+  }
+
+  applyState();
+<\/script>
+</body></html>`);
+  w.document.close();
+}
+
+// ─── ROOM SETUP ───
+
+const SETUP_KEY = 'roomSetup::Chicago Open 2026';
+
+const STUDIO_ABBREV = {
+  'Brookfield':'BKFD','Burr Ridge':'BR','Clearwater':'CLW','Doylestown':'DOYS',
+  'Glen Ellyn':'GE','Green Bay South':'GBS','Lakeview':'LKV','Las Sendas':'LS',
+  'Long Grove':'LG','Madison West':'MAD','Menomonee Falls':'MEN','Mokena':'MOK',
+  'Northbrook':'NBK','Oak Creek':'OAK','Orange':'ORG','Park Ridge':'PKR',
+  'Pensacola':'PEN','Pewaukee':'PEW','Pleasant Prairie':'PP','Schererville':'SCHER',
+  'South Barrington':'SB','St. Charles':'STC','West Bloomfield':'WB',
+  'West Loop':'WL','Wilmette':'WIL',
+};
+function abbrev(name) {
+  // For combined groups like "A / B", abbreviate each part
+  return name.split(' / ').map(s => STUDIO_ABBREV[s.trim()] || s.trim().slice(0,4).toUpperCase()).join('/');
+}
+
+const DEFAULT_VENDORS = [
+  { id:'v1', label:'Exciting Events',  note:'1 table 1 chair' },
+  { id:'v2', label:'Dore',             note:'' },
+  { id:'v3', label:'Bobby Tan',        note:'3 classroom tables, 5 highboys, 4 chairs, 1 barstool' },
+  { id:'v4', label:'Jewelry (Esther)', note:'6 regular tables + 3 small rounds' },
+  { id:'v5', label:'Upstage',          note:'2 tables 2 chairs' },
+  { id:'v6', label:'Plante',           note:'2-3 tables on high rise' },
+  { id:'v7', label:'EE / Alex C.',     note:'2 6ft tables near Reg' },
+  { id:'v8', label:'Reg.',             note:'2-3 tables' },
+  { id:'v9', label:'Lavanya',          note:'1 highboy 1 small table' },
+  { id:'v10',label:'World Cup Series', note:'1 table' },
+  { id:'v11',label:'Step & Repeat',    note:'backdrop, left wall' },
+];
+
+let setupData = null;
+
+async function loadSetupData() {
+  if (setupData) return setupData;
+  try {
+    const val = await fbGet(SETUP_KEY);
+    setupData = val ? JSON.parse(val) : { vendors: JSON.parse(JSON.stringify(DEFAULT_VENDORS)), decor:'', overrides:[] };
+  } catch(e) {
+    setupData = { vendors: JSON.parse(JSON.stringify(DEFAULT_VENDORS)), decor:'', overrides:[] };
+  }
+  return setupData;
+}
+async function saveSetupData() {
+  await fbSet(SETUP_KEY, JSON.stringify(setupData));
+  showSaveBanner();
+}
+
+function assignTables(count) {
+  if (count <= 0) return [];
+  const n = Math.ceil(count / 10);
+  const base = Math.floor(count / n);
+  const rem  = count % n;
+  return Array.from({length:n}, (_,i) => base + (i < rem ? 1 : 0)).sort((a,b)=>b-a);
+}
+
+function getStudioDinnerCount(studio, comp) {
+  const d = getStudioData(studio, comp);
+  // meals[] has VIP rows auto-checked — just count satCocktail directly
+  return d.meals.filter(r=>r.satCocktail).length;
+}
+
+// ── BUILD TABLE GROUPS ──
+function buildTableGroups(comp, overrides) {
+  const allStudios = getAllStudiosForComp(comp);
+  const counts = allStudios.map(s=>({studio:s, count:getStudioDinnerCount(s,comp)})).filter(s=>s.count>0);
+
+  // Apply manual overrides (combined groups set by user)
+  // overrides = [{studios:['A','B'], label:'A / B'}]
+  const overrideStudios = new Set((overrides||[]).flatMap(o=>o.studios));
+
+  const solo    = counts.filter(s=>s.count>=5 && !overrideStudios.has(s.studio));
+  const small   = counts.filter(s=>s.count<5  && !overrideStudios.has(s.studio));
+
+  // Auto-combine small schools
+  const autoCombined = [];
+  let cg = {studios:[], count:0};
+  small.forEach(s=>{
+    cg.studios.push(s.studio); cg.count+=s.count;
+    if(cg.count>=5){autoCombined.push({...cg}); cg={studios:[],count:0};}
+  });
+  if(cg.studios.length){
+    if(autoCombined.length>0){autoCombined[autoCombined.length-1].studios.push(...cg.studios);autoCombined[autoCombined.length-1].count+=cg.count;}
+    else autoCombined.push({...cg});
+  }
+
+  const groups = [
+    ...solo.map(s=>({label:s.studio, count:s.count, combined:false, studios:[s.studio]})),
+    ...autoCombined.map(g=>({label:g.studios.join(' / '), count:g.count, combined:true, studios:g.studios})),
+    ...(overrides||[]).map(o=>{
+      const total = o.studios.reduce((s,n)=>s+getStudioDinnerCount(n,comp),0);
+      return {label:o.label||o.studios.join(' / '), count:total, combined:true, studios:o.studios};
+    }),
+  ].sort((a,b)=>b.count-a.count);
+
+  groups.forEach(g=>{ g.tables = assignTables(g.count); });
+  return groups;
+}
+
+// ── SVG BUILDER ──
+// Layout: dance floor right-of-center, judges panel on far left
+// Audience tables: top row, bottom row, right column only
+//
+// Canvas 1000×600
+// Left strip (x 10-120): judges panel (two vertical rect tables)
+// Dance floor: x=150, y=100, w=560, h=320
+// Right strip (x=740-970): right column tables
+// Top row: y=55 (above floor)
+// Bottom row: y=530 (below floor)
+
+function buildSVG(groups, comp) {
+  const CW=1000, CH=600;
+  const FX=150, FY=100, FW=560, FH=320; // dance floor
+  const TR=22; // table circle radius — smaller
+  const PAL=['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e91e63','#ff9800','#607d8b','#795548','#9c27b0','#3f51b5','#009688','#f39c12','#1abc9c','#e74c3c','#3498db'];
+  const colors={};
+  groups.forEach((g,i)=>{ colors[g.label]=PAL[i%PAL.length]; });
+
+  // Flatten to individual table slots
+  const slots=[];
+  groups.forEach(g=>g.tables.forEach(sz=>slots.push({label:g.label,size:sz,combined:g.combined})));
+
+  // Zone definitions — NO left column (judges there)
+  // Top row: above dance floor, from x=155 to x=700, spacing 52
+  // Bottom row: below dance floor, same x range
+  // Right column: x=760, y from 110 to 410, spacing 52
+  const topSlots    = Math.floor((FW)/52);   // ~10
+  const botSlots    = Math.floor((FW)/52);   // ~10
+  const rightSlots  = Math.floor(FH/52);     // ~6
+
+  const positions=[];
+  // Top row
+  for(let i=0;i<topSlots;i++) positions.push({cx: FX+TR+i*52, cy: FY-TR-12});
+  // Bottom row
+  for(let i=0;i<botSlots;i++) positions.push({cx: FX+TR+i*52, cy: FY+FH+TR+12});
+  // Right column
+  for(let i=0;i<rightSlots;i++) positions.push({cx: FX+FW+TR+18, cy: FY+TR+i*52});
+
+  const placed=[];
+  slots.forEach((s,i)=>{ if(i<positions.length) placed.push({...s,...positions[i]}); });
+  const overflow=slots.slice(positions.length);
+
+  // Build table circles SVG
+  const tablesSVG = placed.map(t=>{
+    const c=colors[t.label]||'#888';
+    const ab=abbrev(t.label);
+    // For combined, show abbreviated names stacked if two parts
+    const parts=ab.split('/');
+    const nameLines = parts.length===1
+      ? [`<text x="${t.cx}" y="${t.cy-4}" text-anchor="middle" font-size="8" font-weight="700" fill="#fff" font-family="Arial">${parts[0]}</text>`]
+      : [`<text x="${t.cx}" y="${t.cy-8}" text-anchor="middle" font-size="7" font-weight="700" fill="#fff" font-family="Arial">${parts[0]}</text>`,
+         `<text x="${t.cx}" y="${t.cy-1}" text-anchor="middle" font-size="7" font-weight="700" fill="#fff" font-family="Arial">${parts[1]||''}</text>`];
+    return `<circle cx="${t.cx}" cy="${t.cy}" r="${TR}" fill="${c}" fill-opacity="0.9" stroke="#fff" stroke-width="1.5"/>
+    ${nameLines.join('')}
+    <text x="${t.cx}" y="${t.cy+11}" text-anchor="middle" font-size="10" font-weight="900" fill="#fff" font-family="Arial">${t.size}</text>`;
+  }).join('');
+
+  // Judges panel — two vertical rectangles on far left
+  const judgesSVG = `
+    <rect x="18" y="${FY}" width="38" height="${FH}" rx="4" fill="#c9a84c" fill-opacity="0.25" stroke="#c9a84c" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <rect x="62" y="${FY}" width="38" height="${FH}" rx="4" fill="#c9a84c" fill-opacity="0.25" stroke="#c9a84c" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="37" y="${FY+FH/2}" text-anchor="middle" font-size="8" fill="#8B6914" font-family="Arial" font-weight="700" transform="rotate(-90,37,${FY+FH/2})">JUDGES TABLE</text>
+    <text x="81" y="${FY+FH/2}" text-anchor="middle" font-size="8" fill="#8B6914" font-family="Arial" font-weight="700" transform="rotate(-90,81,${FY+FH/2})">JUDGES TABLE</text>`;
+
+  // Overflow warning
+  const overflowSVG = overflow.length
+    ? `<text x="${CW/2}" y="${CH-8}" text-anchor="middle" font-size="9" fill="#c0392b" font-family="Arial">⚠ ${overflow.length} tables don't fit — add more rows or reduce combining</text>`
+    : '';
+
+  return `<svg viewBox="0 0 ${CW} ${CH}" style="width:100%;background:#faf8f3;border:1px solid var(--border);border-radius:8px;display:block">
+    <!-- Room border -->
+    <rect x="5" y="5" width="${CW-10}" height="${CH-10}" rx="6" fill="none" stroke="#ccc" stroke-width="1.5"/>
+    <!-- Dance floor -->
+    <rect x="${FX}" y="${FY}" width="${FW}" height="${FH}" rx="4" fill="#e8e0d0" stroke="#c9a84c" stroke-width="2"/>
+    <text x="${FX+FW/2}" y="${FY+FH/2-10}" text-anchor="middle" font-size="16" font-weight="700" fill="#c9a84c" font-family="Georgia,serif">DANCE FLOOR</text>
+    <text x="${FX+FW/2}" y="${FY+FH/2+10}" text-anchor="middle" font-size="10" fill="#b0a080" font-family="Arial">${comp}</text>
+    <!-- Judges panel -->
+    ${judgesSVG}
+    <!-- Audience tables -->
+    ${tablesSVG}
+    ${overflowSVG}
+  </svg>`;
+}
+
+async function renderSetupTab() {
+  const el = document.getElementById('setupContent');
+  el.innerHTML = '<p style="color:var(--muted);padding:1rem;font-size:0.8rem">Loading setup...</p>';
+  const sd = await loadSetupData();
+  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+
+  const groups = buildTableGroups(comp, sd.overrides||[]);
+  const totalTables = groups.reduce((s,g)=>s+g.tables.length,0);
+  const totalDiners = groups.reduce((s,g)=>s+g.count,0);
+  const needsCombining = getAllStudiosForComp(comp)
+    .map(s=>({studio:s,count:getStudioDinnerCount(s,comp)}))
+    .filter(s=>s.count>0 && s.count<5 && !(sd.overrides||[]).flatMap(o=>o.studios).includes(s));
+
+  const PAL=['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e91e63','#ff9800','#607d8b','#795548','#9c27b0','#3f51b5','#009688','#f39c12','#1abc9c','#e74c3c','#3498db'];
+  const colors={};
+  groups.forEach((g,i)=>{colors[g.label]=PAL[i%PAL.length];});
+
+  // Key / legend
+  const keyHTML = groups.map(g=>`
+    <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.68rem;background:#fff;border:1px solid var(--border);border-radius:4px;padding:0.2rem 0.5rem;white-space:nowrap">
+      <div style="width:12px;height:12px;border-radius:50%;background:${colors[g.label]};flex-shrink:0"></div>
+      <strong>${abbrev(g.label)}</strong> = ${g.label}${g.combined?' <em style="color:var(--muted)">(combined)</em>':''}
+      <span style="color:var(--muted)">${g.count} guests</span>
+    </div>`).join('');
+
+  // Editable breakdown table with +/- table controls
+  const breakdownRows = groups.map((g,gi)=>{
+    const tableDesc = g.tables.map((t,ti)=>`
+      <span style="display:inline-flex;align-items:center;gap:3px;background:#f5f0e8;border:1px solid var(--border);border-radius:4px;padding:1px 5px;margin:2px;font-size:0.7rem">
+        <span style="color:${colors[g.label]};font-weight:700">${t}-top</span>
+        <button onclick="editTableSize(${gi},${ti},-1)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:0.8rem;padding:0 2px">−</button>
+        <button onclick="editTableSize(${gi},${ti},+1)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:0.8rem;padding:0 2px">+</button>
+        <button onclick="removeTable(${gi},${ti})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:0.7rem;padding:0 2px">✕</button>
+      </span>`).join('');
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:0.4rem">
+          <div style="width:10px;height:10px;border-radius:50%;background:${colors[g.label]};flex-shrink:0"></div>
+          <strong>${g.label}</strong>${g.combined?' <span style="font-size:0.6rem;color:var(--muted)">(combined)</span>':''}
+        </div>
+      </td>
+      <td style="text-align:center">${g.count}</td>
+      <td style="text-align:center">${g.tables.length}</td>
+      <td>
+        ${tableDesc}
+        <button onclick="addTable(${gi})" style="background:none;border:1px dashed var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:0.68rem;padding:2px 6px;margin:2px">+ table</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
+      <div style="font-size:0.72rem;color:var(--muted)">${comp} &nbsp;·&nbsp; <strong style="color:var(--text)">${totalTables} tables</strong> &nbsp;·&nbsp; <strong style="color:var(--text)">${totalDiners} diners</strong></div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+        <button class="btn btn-sm btn-outline" style="width:auto" onclick="renderSetupTab()">🔄 Refresh</button>
+        <button class="btn btn-sm btn-outline" style="width:auto" onclick="saveSetupData().then(()=>renderSetupTab())">💾 Save Layout</button>
+        <button class="btn btn-sm" style="width:auto;background:var(--gold);color:var(--black)" onclick="printSetupDiagram()">🖨️ Print Setup Sheet</button>
+      </div>
+    </div>
+
+    ${needsCombining.length ? `<div style="background:#fff8e8;border:1px solid #f0c060;border-radius:6px;padding:0.5rem 0.75rem;margin-bottom:0.75rem;font-size:0.7rem">
+      <strong style="color:#b8690b">⚠ Auto-combined (under 5 guests):</strong> ${needsCombining.map(s=>`${s.studio} (${s.count})`).join(', ')}
+    </div>`:''}
+
+    <!-- SVG DIAGRAM -->
+    <div style="overflow-x:auto;margin-bottom:1rem">
+      ${buildSVG(groups, comp)}
+    </div>
+
+    <!-- KEY -->
+    <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:1rem;padding:0.6rem;background:#fff;border:1px solid var(--border);border-radius:6px">
+      <div style="width:100%;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:0.25rem;font-weight:600">Studio Key</div>
+      ${keyHTML}
+    </div>
+
+    <!-- EDITABLE BREAKDOWN -->
+    <div class="section-card" style="margin-bottom:1rem">
+      <div class="section-header">
+        <div class="section-title">Seating Breakdown — Edit Tables</div>
+        <span class="badge badge-gold">${totalTables} tables · ${totalDiners} guests</span>
+      </div>
+      <div class="section-body" style="overflow-x:auto">
+        <p style="font-size:0.67rem;color:var(--muted);margin-bottom:0.75rem">Use +/− to resize individual tables, ✕ to remove a table, or "+ table" to add one. Click 💾 Save Layout when done.</p>
+        <table class="data-table" id="setupBreakdownTable">
+          <thead><tr><th>Studio</th><th style="text-align:center">Guests</th><th style="text-align:center">Tables</th><th>Table Sizes (click to edit)</th></tr></thead>
+          <tbody>${breakdownRows}</tbody>
+          <tfoot><tr class="total-row">
+            <td>TOTAL</td><td style="text-align:center">${totalDiners}</td><td style="text-align:center">${totalTables}</td><td></td>
+          </tr></tfoot>
+        </table>
+        <div style="margin-top:0.75rem">
+          <button class="btn btn-sm btn-outline" style="width:auto" onclick="resetSetupTables()">↺ Reset all tables to auto</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VENDOR NOTES -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title">Vendor &amp; Room Notes</div>
+        <button class="btn btn-sm btn-outline" style="width:auto" onclick="saveSetupData().then(()=>alert('Saved!'))">Save Notes</button>
+      </div>
+      <div class="section-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:0.6rem;margin-bottom:0.75rem">
+          ${sd.vendors.map((v,i)=>`
+          <div style="background:#faf8f3;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.6rem">
+            <input type="text" value="${v.label}" style="font-weight:700;font-size:0.75rem;width:100%;border:none;background:transparent;color:var(--gold);margin-bottom:3px" onchange="setupData.vendors[${i}].label=this.value"/>
+            <input type="text" value="${v.note||''}" placeholder="Setup notes..." style="font-size:0.68rem;width:100%;border:1px solid var(--border);border-radius:4px;padding:0.2rem 0.35rem;background:#fff;color:#1a1a1a" onchange="setupData.vendors[${i}].note=this.value"/>
+          </div>`).join('')}
+          <div style="display:flex;align-items:center;justify-content:center">
+            <button class="btn btn-sm btn-outline" style="width:auto" onclick="setupData.vendors.push({id:'v'+Date.now(),label:'New Vendor',note:''});renderSetupTab()">+ Add Vendor</button>
+          </div>
+        </div>
+        <label style="font-size:0.68rem">Decor / Special Items</label>
+        <textarea rows="3" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:0.35rem;font-size:0.72rem;background:#fff;color:#1a1a1a;resize:vertical" placeholder="Step and Repeat, screens, etc." onchange="setupData.decor=this.value">${sd.decor||'Step and Repeat\nBarbie Box\nScreens (behind judges)'}</textarea>
+      </div>
+    </div>
+  `;
+
+  // Store groups reference for editing
+  window._setupGroups = groups;
+  window._setupComp   = comp;
+}
+
+// ── EDIT CONTROLS ──
+function editTableSize(groupIdx, tableIdx, delta) {
+  const g = window._setupGroups[groupIdx];
+  if (!g) return;
+  const newSize = Math.max(1, Math.min(10, (g.tables[tableIdx]||5) + delta));
+  g.tables[tableIdx] = newSize;
+  g.count = g.tables.reduce((s,t)=>s+t,0); // update display count to match
+  _persistSetupGroups();
+  renderSetupTab();
+}
+
+function removeTable(groupIdx, tableIdx) {
+  const g = window._setupGroups[groupIdx];
+  if (!g || g.tables.length <= 1) { alert("Can't remove the only table for a studio."); return; }
+  g.tables.splice(tableIdx, 1);
+  g.count = g.tables.reduce((s,t)=>s+t,0);
+  _persistSetupGroups();
+  renderSetupTab();
+}
+
+function addTable(groupIdx) {
+  const g = window._setupGroups[groupIdx];
+  if (!g) return;
+  const remaining = g.count - g.tables.reduce((s,t)=>s+t,0);
+  g.tables.push(Math.min(10, Math.max(5, remaining > 0 ? remaining : 6)));
+  _persistSetupGroups();
+  renderSetupTab();
+}
+
+function resetSetupTables() {
+  if (!confirm('Reset all tables back to auto-calculated sizes?')) return;
+  if (setupData) setupData.overrides = [];
+  window._setupGroups = null;
+  renderSetupTab();
+}
+
+function _persistSetupGroups() {
+  if (!setupData) setupData = { vendors: JSON.parse(JSON.stringify(DEFAULT_VENDORS)), decor:'', overrides:[] };
+  // Save current manual table assignments as overrides
+  setupData.tableOverrides = (window._setupGroups||[]).map(g=>({
+    label: g.label, studios: g.studios, tables: [...g.tables]
+  }));
+}
+
+function printSetupDiagram() {
+  const groups = window._setupGroups;
+  const comp   = window._setupComp || (document.getElementById('orgCompSelect')?.value || appState.competitions[0]);
+  const sd     = setupData;
+  if (!groups) { alert('Open the Room Setup tab first.'); return; }
+
+  const today = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const totalTables = groups.reduce((s,g)=>s+g.tables.length,0);
+  const totalDiners = groups.reduce((s,g)=>s+g.count,0);
+
+  const PAL=['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e91e63','#ff9800','#607d8b','#795548','#9c27b0','#3f51b5','#009688','#f39c12','#1abc9c','#e74c3c','#3498db'];
+  const colors={};
+  groups.forEach((g,i)=>{colors[g.label]=PAL[i%PAL.length];});
+
+  const breakdownRows = groups.map(g=>`
+    <tr>
+      <td style="padding:4px 8px">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colors[g.label]};margin-right:5px;vertical-align:middle"></span>
+        <strong>${g.label}</strong>${g.combined?' <em style="font-size:9px;color:#888">(combined)</em>':''}
+      </td>
+      <td style="text-align:center;padding:4px 8px">${g.count}</td>
+      <td style="text-align:center;padding:4px 8px">${g.tables.length}</td>
+      <td style="padding:4px 8px">${g.tables.map(t=>`${t}-top`).join(', ')}</td>
+    </tr>`).join('');
+
+  const keyItems = groups.map(g=>`
+    <div style="display:flex;align-items:center;gap:4px;font-size:9px;border:1px solid #eee;border-radius:3px;padding:2px 5px">
+      <div style="width:9px;height:9px;border-radius:50%;background:${colors[g.label]};flex-shrink:0"></div>
+      <strong>${abbrev(g.label)}</strong> = ${g.label}
+    </div>`).join('');
+
+  const vendorList = (sd?.vendors||DEFAULT_VENDORS).map(v=>`<li><strong>${v.label}</strong>${v.note?` — ${v.note}`:''}</li>`).join('');
+  const decorList  = (sd?.decor||'Step and Repeat\nBarbie Box\nScreens (behind judges)').split('\n').filter(Boolean).map(l=>`<li>${l}</li>`).join('');
+
+  const svgMarkup = buildSVG(groups, comp)
+    .replace('style="width:100%;background:#faf8f3;border:1px solid var(--border);border-radius:8px;display:block"','style="width:100%;background:#faf8f3;display:block"');
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+  <title>Room Setup — ${comp}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:0.6rem 0.9rem}
+    h1{font-family:Georgia,serif;font-size:17px;color:#8B6914;margin-bottom:2px}
+    .sub{font-size:9px;color:#999;margin-bottom:0.6rem}
+    h2{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#555;border-bottom:1.5px solid #c9a84c;padding-bottom:2px;margin:0.6rem 0 0.35rem}
+    table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:0.5rem}
+    th{background:#f5f0e8;padding:3px 8px;text-align:left;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#777;border-bottom:1px solid #ddd}
+    td{border-bottom:1px solid #f0ebe0}
+    tfoot td{font-weight:700;background:#faf8f3;border-top:2px solid #ddd;padding:3px 8px}
+    .key{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:0.5rem}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem}
+    ul{margin-left:1rem;font-size:10px;line-height:1.7}
+    @media print{body{padding:.2rem .4rem}}
+  </style>
+</head><body>
+  <h1>${comp} — Room Setup &amp; Seating Plan</h1>
+  <div class="sub">Prepared ${today} &nbsp;·&nbsp; ${totalTables} tables &nbsp;·&nbsp; ${totalDiners} dinner guests &nbsp;·&nbsp; For hotel/venue</div>
+  ${svgMarkup}
+  <h2>Studio Key</h2>
+  <div class="key">${keyItems}</div>
+  <h2>Seating Breakdown</h2>
+  <table>
+    <thead><tr><th>Studio</th><th style="text-align:center">Guests</th><th style="text-align:center">Tables</th><th>Table Sizes</th></tr></thead>
+    <tbody>${breakdownRows}</tbody>
+    <tfoot><tr><td>TOTAL</td><td style="text-align:center">${totalDiners}</td><td style="text-align:center">${totalTables}</td><td></td></tr></tfoot>
+  </table>
+  <div class="two-col">
+    <div><h2>Vendor / Exhibitor Setup</h2><ul>${vendorList}</ul></div>
+    <div><h2>Decor &amp; Special Items</h2><ul>${decorList}</ul></div>
   </div>
-  ${bodyHTML||'<p style="color:#999">No data loaded yet.</p>'}
   <script>setTimeout(()=>window.print(),400);<\/script>
 </body></html>`);
   w.document.close();
 }
+
 
 // ═══════════════════════════════════════════════════════
 // INIT — wait for Firebase before loading
