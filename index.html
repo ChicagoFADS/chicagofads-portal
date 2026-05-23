@@ -1054,7 +1054,10 @@ async function fbDelete(key) {
   } catch(e) { console.error('fbDelete error', e); }
 }
 
+let _isLoading = false;
+
 async function loadState() {
+  _isLoading = true;
   try {
     const val = await fbGet('appState');
     if (val) {
@@ -1077,16 +1080,17 @@ async function loadState() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.data) appState.data = {};
 
-  // Load each studio's data separately from Firebase
+  // Load each studio's data separately from Firebase — always get freshest copy
   const allCombos = [];
   appState.studios.forEach(s => appState.competitions.forEach(c => allCombos.push(s + '::' + c)));
   appState.visitingStudios.forEach(v => { if(!allCombos.includes(v.name+'::'+v.comp)) allCombos.push(v.name+'::'+v.comp); });
   for (const key of allCombos) {
     try {
       const val = await fbGet('studioData::' + key);
-      if (val) appState.data[key] = JSON.parse(val);
+      if (val) appState.data[key] = JSON.parse(val); // always overwrite with Firebase value
     } catch(e) {}
   }
+  _isLoading = false;
 
   populateLoginDropdown();
 
@@ -1109,8 +1113,8 @@ async function loadState() {
 }
 
 async function saveState() {
+  if (_isLoading) return; // never save while loading — would overwrite fresh Firebase data
   try {
-    // Save config separately from studio data to avoid Firebase 1MB limit
     const config = {
       studios: appState.studios,
       competitions: appState.competitions,
@@ -1130,8 +1134,12 @@ async function saveState() {
 
 function showSaveBanner() {
   const b = document.getElementById('saveBanner');
+  if (!b) return;
+  b.textContent = '✓ Saved';
+  b.style.background = '';
   b.classList.add('show');
   setTimeout(() => b.classList.remove('show'), 2500);
+}
 }
 
 function getStudioData(studio, comp) {
@@ -1928,8 +1936,8 @@ let autoSaveTimer = null;
 let _unsavedChanges = false;
 
 function triggerAutoSave() {
+  if (_isLoading) return; // don't queue saves during initial data load
   _unsavedChanges = true;
-  // Show "unsaved" indicator immediately
   const b = document.getElementById('saveBanner');
   if (b) { b.textContent = '● Saving...'; b.classList.add('show'); b.style.background='#888'; }
   clearTimeout(autoSaveTimer);
