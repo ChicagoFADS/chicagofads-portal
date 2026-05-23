@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Chicago FADS Competition Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <!-- Firebase -->
@@ -6521,17 +6524,18 @@ function initApp() {
   if (window._fbReady) {
     loadState();
   } else {
-    // Show loading message on login card while Firebase initializes
     const btn = document.querySelector('#loginPage .btn');
     if (btn) { btn.textContent = 'Connecting...'; btn.disabled = true; }
+    const enableBtn = () => { if (btn) { btn.textContent = 'Enter Portal'; btn.disabled = false; } };
     document.addEventListener('firebase-ready', () => {
-      if (btn) { btn.textContent = 'Enter Portal'; btn.disabled = false; }
+      enableBtn();
       loadState();
     }, { once: true });
-    // Fallback after 5 seconds — load anyway with defaults
+    // Fallback after 3 seconds — load anyway and always re-enable button
     setTimeout(() => {
+      enableBtn();
       if (!window._fbReady) loadState();
-    }, 5000);
+    }, 3000);
   }
 }
 initApp();
