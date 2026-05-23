@@ -948,6 +948,10 @@
     </div>
 
     <div class="tab-content active" id="org-tab-overview">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <div style="font-size:0.7rem;color:var(--muted)">Live data from Firebase</div>
+        <button class="btn btn-sm btn-outline" style="width:auto" onclick="renderOverview()">🔄 Refresh Data</button>
+      </div>
       <div id="overviewContent"></div>
     </div>
 
@@ -1097,7 +1101,7 @@ async function loadState() {
 
   populateLoginDropdown();
 
-  // Restore login session if user previously logged in
+  // Restore login session AFTER all Firebase data is loaded
   try {
     const saved = localStorage.getItem('currentUser');
     if (saved) {
@@ -1106,11 +1110,16 @@ async function loadState() {
       document.getElementById('appHeader').style.display = 'flex';
       document.getElementById('appMain').style.display = 'block';
       document.getElementById('headerName').textContent = currentUser.name;
-      if (currentUser.type === 'organizer') {
-        showOrganizerView();
-      } else {
-        showStudioView(currentUser.name);
-      }
+      // Small delay to ensure all Firebase reads are truly complete
+      setTimeout(() => {
+        if (currentUser.type === 'organizer') {
+          showOrganizerView();
+          // Force a fresh overview render after a beat to ensure all data loaded
+          setTimeout(() => renderOverview(), 500);
+        } else {
+          showStudioView(currentUser.name);
+        }
+      }, 100);
     }
   } catch(e) { console.error('Session restore error:', e); }
 }
@@ -2164,7 +2173,7 @@ function renderStudioSummary() {
     ['Friday Dinner',           d.meals.filter(r=>r.friDinner).length + vipCount],
     ['Saturday Breakfast',      d.meals.filter(r=>r.satBrk).length + vipCount],
     ['Saturday Lunch',          d.meals.filter(r=>r.satLunch).length + vipCount],
-    ['Saturday Banquet Dinner', d.meals.filter(r=>r.satCocktail).length + vipCount],
+    ['Saturday Banquet Dinner', vipCount + d.meals.filter(r=>{const t=d.tickets.find(t=>t.name===r.name);return !(t&&t.vipAlc==='VIP')&&r.satCocktail;}).length],
     ["Children's Meal",         d.meals.filter(r=>r.childrenMeal).length],
   ];
 
@@ -2337,7 +2346,7 @@ async function renderOverview() {
   getAllStudiosForComp(comp).forEach(s => {
     const d = getStudioData(s, comp);
     d.vip.forEach(r => { if(r.meal && dc[r.meal]!==undefined) dc[r.meal]++; });
-    d.meals.filter(r=>r.satCocktail).forEach(r => {
+    d.meals.filter(r=>{const t=d.tickets.find(t=>t.name===r.name);return !(t&&t.vipAlc==='VIP')&&r.satCocktail;}).forEach(r => {
       if(r.childrenMeal) dc['Kids Meal']++;
       else if(r.satMealChoice && dc[r.satMealChoice]!==undefined) dc[r.satMealChoice]++;
     });
@@ -2352,10 +2361,19 @@ async function renderOverview() {
 
   allStudiosForComp.forEach(s => {
     const d = getStudioData(s, comp);
-    // meals[] now has VIP rows auto-checked — count satCocktail directly, no vipCount addition
-    const diners  = d.meals.filter(r=>r.satCocktail).length;
+    const vipCount = d.vip.filter(r=>r.name).length;
+    const alcDinner = d.meals.filter(r => {
+      const ticket = d.tickets.find(t => t.name === r.name);
+      const isVIP = ticket && ticket.vipAlc === 'VIP';
+      return !isVIP && r.satCocktail;
+    }).length;
+    const diners  = vipCount + alcDinner;
     const missing = d.vip.filter(r=>r.name && !r.meal).length +
-                    d.meals.filter(r=>r.satCocktail && !r.childrenMeal && !r.satMealChoice).length;
+                    d.meals.filter(r => {
+                      const ticket = d.tickets.find(t => t.name === r.name);
+                      const isVIP = ticket && ticket.vipAlc === 'VIP';
+                      return !isVIP && r.satCocktail && !r.childrenMeal && !r.satMealChoice;
+                    }).length;
     if (diners > 0) {
       totalSatDiners += diners;
       missingMealChoices += missing;
@@ -2567,9 +2585,15 @@ function renderMealsTab() {
   const studioRows = allStudios.map(s => {
     const d = getStudioData(s, comp);
     const row = { studio: s };
+    const vipCount = d.vip.filter(r=>r.name).length;
     mealKeys.forEach(m => {
-      // meals[] now includes VIP rows with all boxes auto-checked — just count directly
-      const count = d.meals.filter(r=>r[m.key]).length;
+      // VIPs always get all meals. ALC counted by their actual checkboxes.
+      const alcCount = d.meals.filter(r => {
+        const ticket = d.tickets.find(t => t.name === r.name);
+        const isVIP = ticket && ticket.vipAlc === 'VIP';
+        return !isVIP && r[m.key];
+      }).length;
+      const count = vipCount + alcCount;
       mealTotals[m.label] += count;
       row[m.label] = count;
     });
@@ -2578,7 +2602,7 @@ function renderMealsTab() {
     row['Kids'] = kids;
     Object.keys(sessionTotals).forEach(k => sessionTotals[k] += d.tickets.filter(r=>r[k]).length);
     // dinner choices — ALC meals
-    d.meals.filter(r=>r.satCocktail).forEach(r => {
+    d.meals.filter(r=>{const t=d.tickets.find(t=>t.name===r.name);return !(t&&t.vipAlc==='VIP')&&r.satCocktail;}).forEach(r => {
       const ch = r.childrenMeal ? 'Kids Meal' : (r.satMealChoice||'');
       if (ch && dinnerChoiceTotals[ch] !== undefined) dinnerChoiceTotals[ch]++;
     });
@@ -2686,7 +2710,13 @@ function renderCompareTab() {
       const allStudios = getAllStudiosForComp(c);
       return allStudios.reduce((sum, s) => {
         const d = getStudioData(s, c);
-        return sum + d.meals.filter(r=>r[mk.key]).length;
+        const vipCount = d.vip.filter(r=>r.name).length;
+        const alcCount = d.meals.filter(r => {
+          const ticket = d.tickets.find(t => t.name === r.name);
+          const isVIP = ticket && ticket.vipAlc === 'VIP';
+          return !isVIP && r[mk.key];
+        }).length;
+        return sum + vipCount + alcCount;
       }, 0);
     });
     return { label: mk.label, counts };
@@ -3468,7 +3498,7 @@ function generateRegistrationPDF(studio, comp) {
     ['F-D',  d.meals.filter(r=>r.friDinner).length + vipCount],
     ['S-B',  d.meals.filter(r=>r.satBrk).length + vipCount],
     ['S-L',  d.meals.filter(r=>r.satLunch).length + vipCount],
-    ['S-D',  d.meals.filter(r=>r.satCocktail).length + vipCount],
+    ['S-D',  vipCount + d.meals.filter(r=>{const t=d.tickets.find(t=>t.name===r.name);return !(t&&t.vipAlc==='VIP')&&r.satCocktail;}).length],
     ['Kids', d.meals.filter(r=>r.childrenMeal).length],
   ];
 
@@ -5727,7 +5757,7 @@ async function generateStudioSummaryPDF(studio, comp) {
     {label:'Fri Dinner',   vip:vipCount, alc:d.meals.filter(r=>r.friDinner).length},
     {label:'Sat Breakfast',vip:vipCount, alc:d.meals.filter(r=>r.satBrk).length},
     {label:'Sat Lunch',    vip:vipCount, alc:d.meals.filter(r=>r.satLunch).length},
-    {label:'Sat Banquet',  vip:vipCount, alc:d.meals.filter(r=>r.satCocktail).length},
+    {label:'Sat Banquet',  vip:vipCount, alc:d.meals.filter(r=>{const t=d.tickets.find(t=>t.name===r.name);return !(t&&t.vipAlc==='VIP')&&r.satCocktail;}).length},
   ];
   const dinnerChoices = ['Beef','Fish','Chicken','Vegetarian'].map(c=>({
     choice:c,
@@ -6145,8 +6175,15 @@ function assignTables(count) {
 
 function getStudioDinnerCount(studio, comp) {
   const d = getStudioData(studio, comp);
-  // meals[] has VIP rows auto-checked — just count satCocktail directly
-  return d.meals.filter(r=>r.satCocktail).length;
+  const vipCount = d.vip.filter(r=>r.name).length;
+  const alcWithCocktail = d.meals.filter(r => {
+    // Only count ALC people (vipAlc !== 'VIP') with satCocktail checked
+    const ticket = d.tickets.find(t => t.name === r.name);
+    const isVIP = ticket && ticket.vipAlc === 'VIP';
+    return !isVIP && r.satCocktail;
+  }).length;
+  // VIPs always get sat banquet — count them all
+  return vipCount + alcWithCocktail;
 }
 
 // ── BUILD TABLE GROUPS ──
