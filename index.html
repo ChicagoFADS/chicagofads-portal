@@ -385,60 +385,69 @@
     color: #1a1a1a;
   }
 
-  /* ── PEOPLE LIST — compact ── */
-  .people-table { width:100%; border-collapse:collapse; }
+  /* ── PEOPLE LIST — ultra compact ── */
+  .people-table { width:100%; border-collapse:collapse; font-size:0.7rem; }
   .people-table th {
-    background:#f5f0e8; padding:5px 8px; font-size:0.62rem;
-    letter-spacing:0.08em; text-transform:uppercase; color:#888;
-    border-bottom:2px solid var(--border); text-align:left; white-space:nowrap;
+    background:#f5f0e8; padding:4px 6px; font-size:0.58rem;
+    letter-spacing:0.08em; text-transform:uppercase; color:#999;
+    border-bottom:2px solid var(--border); white-space:nowrap;
   }
-  .people-table td { padding:0; border-bottom:1px solid #f0ebe0; vertical-align:middle; }
+  .people-table td {
+    padding:3px 4px; border-bottom:1px solid #f0ebe0;
+    vertical-align:middle;
+  }
   .people-table tr:hover td { background:#fdfbf5; }
   .people-table tr.vip-locked td { background:#fffbf0; }
-
-  /* inline inputs inside table */
   .people-table input[type="text"] {
-    width:100%; font-size:0.75rem; border:none; background:transparent;
-    padding:6px 8px; color:#1a1a1a; font-family:inherit;
+    font-size:0.72rem; border:none; background:transparent;
+    padding:3px 5px; color:#1a1a1a; width:100%; font-family:inherit;
   }
   .people-table input[type="text"]:focus {
     background:#fff; outline:1px solid var(--gold); border-radius:2px;
   }
   .people-table select {
-    font-size:0.72rem; border:none; background:transparent; color:#1a1a1a;
-    padding:5px 4px; cursor:pointer; width:100%;
+    font-size:0.68rem; border:none; background:transparent;
+    color:#1a1a1a; padding:3px 2px; cursor:pointer; width:100%;
   }
   .people-table select:focus { background:#fff; outline:1px solid var(--gold); }
-  .pchk { display:flex; flex-direction:column; gap:3px; padding:5px 6px; }
-  .pchk label {
-    display:flex; align-items:center; gap:4px; font-size:0.68rem;
-    color:var(--text); white-space:nowrap; cursor:pointer; user-select:none;
-  }
-  .pchk label:hover { color:var(--gold); }
-  .pchk input[type="checkbox"] { width:13px; height:13px; accent-color:var(--gold); cursor:pointer; flex-shrink:0; }
-  .pchk label.checked { color:var(--gold); font-weight:600; }
-  .vip-pkg-badge {
-    display:inline-block; background:var(--gold); color:#fff;
-    font-size:0.6rem; font-weight:700; padding:2px 6px; border-radius:3px;
-    letter-spacing:0.05em;
-  }
-  .p-total { font-size:0.72rem; font-weight:700; color:var(--gold); padding:0 8px; white-space:nowrap; }
-  .p-remove { background:none; border:none; color:#ccc; cursor:pointer; font-size:0.9rem; padding:0 6px; }
-  .p-remove:hover { color:var(--red); }
-  .dinner-sel {
-    font-size:0.68rem; border:1px solid var(--border); border-radius:3px;
-    background:#fff; color:#1a1a1a; padding:2px 4px; width:100%; margin-top:3px;
-  }
-  .dinner-sel.missing { outline:2px solid var(--red); }
-  .allergy-inp {
-    font-size:0.65rem; border:1px solid var(--border); border-radius:3px;
-    background:#fff; color:#1a1a1a; padding:2px 5px; width:100%; margin-top:3px;
-  }
-  .price-muted { color:var(--muted); font-size:0.58rem; margin-left:1px; }
 
-  @media(max-width:700px) {
-    .people-table { font-size:0.65rem; }
+  /* inline checkbox row */
+  .chk-row {
+    display:flex; flex-wrap:wrap; gap:2px 8px;
+    padding:3px 4px; align-items:center;
   }
+  .chk-row label {
+    display:flex; align-items:center; gap:3px;
+    font-size:0.62rem; color:#555; white-space:nowrap;
+    cursor:pointer; user-select:none;
+  }
+  .chk-row label:hover { color:var(--gold); }
+  .chk-row label.on { color:var(--gold); font-weight:700; }
+  .chk-row input[type="checkbox"] {
+    width:11px; height:11px; accent-color:var(--gold);
+    cursor:pointer; flex-shrink:0; margin:0;
+  }
+  .chk-sep {
+    width:1px; height:14px; background:var(--border);
+    display:inline-block; margin:0 4px; flex-shrink:0;
+  }
+  .vip-badge {
+    font-size:0.58rem; font-weight:700; background:var(--gold);
+    color:#fff; padding:1px 5px; border-radius:3px; white-space:nowrap;
+  }
+  .dinner-inline {
+    font-size:0.65rem; border:1px solid var(--border); border-radius:3px;
+    background:#fff; color:#1a1a1a; padding:1px 3px;
+  }
+  .dinner-inline.missing { outline:2px solid var(--red); }
+  .allergy-inline {
+    font-size:0.62rem; border:none; border-bottom:1px solid var(--border);
+    background:transparent; color:#888; width:80px; padding:1px 3px;
+  }
+  .p-total { font-size:0.68rem; font-weight:700; color:var(--gold); padding:0 5px; white-space:nowrap; }
+  .p-remove { background:none; border:none; color:#ddd; cursor:pointer; font-size:0.8rem; padding:0 4px; }
+  .p-remove:hover { color:var(--red); }
+  .price-tag { color:var(--muted); font-size:0.58rem; }
 
   /* ── STAT CARDS ── */
   .stats-grid {
@@ -1128,16 +1137,17 @@ function showSaveBanner() {
 function getStudioData(studio, comp) {
   const key = studio + '::' + comp;
   if (!appState.data[key]) {
-    appState.data[key] = { vip: [], tickets: [], compEntries: [], meals: [] };
+    appState.data[key] = { vip:[], tickets:[], meals:[], compEntries:[] };
   }
-  // migrate old 'entries' to 'tickets' if needed
-  if (appState.data[key].entries && !appState.data[key].tickets) {
-    appState.data[key].tickets = appState.data[key].entries;
-    delete appState.data[key].entries;
-  }
-  if (!appState.data[key].compEntries) appState.data[key].compEntries = [];
-  if (!appState.data[key].tickets) appState.data[key].tickets = [];
-  return appState.data[key];
+  const d = appState.data[key];
+  // Migrate old field names
+  if (d.entries && !d.tickets) { d.tickets = d.entries; delete d.entries; }
+  // Always ensure all arrays exist
+  if (!d.vip)         d.vip         = [];
+  if (!d.tickets)     d.tickets     = [];
+  if (!d.meals)       d.meals       = [];
+  if (!d.compEntries) d.compEntries = [];
+  return d;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1221,10 +1231,24 @@ function doLogout() {
 function switchTab(name) {
   document.querySelectorAll('#studioView .tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('#studioView .tab-content').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
+  const btn = document.querySelector(`#studioView .tab[onclick*="'${name}'"]`);
+  if (btn) btn.classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'summary') renderStudioSummary();
-  if (name === 'documents') renderStudioDocs();
+  if (name === 'summary')    renderStudioSummary();
+  if (name === 'documents')  renderStudioDocs();
+  if (name === 'tickets') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderPeopleList(d);
+  }
+  if (name === 'vip') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderVipTable(d.vip);
+  }
+  if (name === 'compentries') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderCompEntriesTable(d.compEntries);
+    initEntryMode();
+  }
 }
 
 function switchOrgTab(name) {
@@ -1411,7 +1435,7 @@ function renderPeopleList(d) {
   const el = document.getElementById('peopleList');
   if (!el) return;
 
-  // Sync meals array length to tickets
+  // Sync meals array
   d.tickets.forEach((t, i) => {
     if (!d.meals[i]) d.meals[i] = { name:t.name, proam:t.proam||'', thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false };
     else if (!d.meals[i].name) d.meals[i].name = t.name;
@@ -1423,14 +1447,10 @@ function renderPeopleList(d) {
     return;
   }
 
-  const chk = (i, key, section, label, price) => {
-    const t = d.tickets[i], m = d.meals[i]||{};
-    const val = section==='t' ? t[key] : m[key];
-    const fn  = section==='t' ? `updatePersonTicket(${i},'${key}',this.checked)` : `updatePersonMeal(${i},'${key}',this.checked)`;
-    return `<label class="${val?'checked':''}">
-      <input type="checkbox" ${val?'checked':''} onchange="${fn}"/>
-      ${label}<span class="price-muted">$${price}</span>
-    </label>`;
+  // Helper: single inline checkbox
+  const c = (checked, onchg, label, price) => {
+    const on = checked ? 'on' : '';
+    return `<label class="${on}"><input type="checkbox" ${checked?'checked':''} onchange="${onchg}"/>${label}<span class="price-tag"> $${price}</span></label>`;
   };
 
   const rows = d.tickets.map((t, i) => {
@@ -1441,76 +1461,75 @@ function renderPeopleList(d) {
     const total     = ticketFee + mealFee;
     const mealMissing = !isVIP && m.satCocktail && !m.childrenMeal && !m.satMealChoice;
 
-    const sessionCell = isVIP
-      ? `<td style="padding:6px 8px"><span class="vip-pkg-badge">FULL PACKAGE ✓</span></td>`
-      : `<td><div class="pchk">
-          ${chk(i,'compFee','t','Comp Fee ','175')}
-          ${chk(i,'thuMat','t','Thu Mat ','15')}
-          ${chk(i,'thuEve','t','Thu Eve ','20')}
-          ${chk(i,'friMat','t','Fri Mat ','15')}
-          ${chk(i,'friEve','t','Fri Eve ','25')}
-          ${chk(i,'satMat','t','Sat Mat ','15')}
-          ${chk(i,'gift','t','Gift ','48')}
-        </div></td>`;
+    const sessionChks = isVIP
+      ? `<span class="vip-badge">FULL PKG ✓</span>`
+      : `<div class="chk-row">
+          ${c(t.compFee,  `updatePersonTicket(${i},'compFee',this.checked)`,  'Comp','175')}
+          ${c(t.thuMat,   `updatePersonTicket(${i},'thuMat',this.checked)`,   'Thu Mat','15')}
+          ${c(t.thuEve,   `updatePersonTicket(${i},'thuEve',this.checked)`,   'Thu Eve','20')}
+          ${c(t.friMat,   `updatePersonTicket(${i},'friMat',this.checked)`,   'Fri Mat','15')}
+          ${c(t.friEve,   `updatePersonTicket(${i},'friEve',this.checked)`,   'Fri Eve','25')}
+          ${c(t.satMat,   `updatePersonTicket(${i},'satMat',this.checked)`,   'Sat Mat','15')}
+          ${c(t.gift,     `updatePersonTicket(${i},'gift',this.checked)`,     'Gift','48')}
+        </div>`;
 
-    const mealCell = isVIP
-      ? `<td style="padding:6px 8px">
-          <span class="vip-pkg-badge">ALL MEALS ✓</span>
-          <div style="margin-top:4px">
-            <select class="dinner-sel" onchange="updatePersonMealChoice(${i},this.value)">
-              <option value="">— Dinner choice —</option>
-              <option ${m.satMealChoice==='Beef'?'selected':''}>Beef</option>
-              <option ${m.satMealChoice==='Fish'?'selected':''}>Fish</option>
-              <option ${m.satMealChoice==='Chicken'?'selected':''}>Chicken</option>
-              <option ${m.satMealChoice==='Vegetarian'?'selected':''}>Vegetarian</option>
-            </select>
-            <input type="text" class="allergy-inp" value="${m.allergy||''}" placeholder="Allergy / GF?" onchange="updatePersonAllergy(${i},this.value)"/>
-          </div>
-        </td>`
-      : `<td><div class="pchk">
-          ${chk(i,'thuDinner','m','Thu Dinner ','82')}
-          ${chk(i,'friBrk','m','Fri Brk ','52')}
-          ${chk(i,'friLunch','m','Fri Lunch ','52')}
-          ${chk(i,'friDinner','m','Fri Dinner ','82')}
-          ${chk(i,'satBrk','m','Sat Brk ','52')}
-          ${chk(i,'satLunch','m','Sat Lunch ','52')}
-          ${chk(i,'satCocktail','m','Sat Banquet ','140')}
-          ${chk(i,'childrenMeal','m','Kids ','45')}
-          ${m.satCocktail ? `<select class="dinner-sel ${mealMissing?'missing':''}" onchange="updatePersonMealChoice(${i},this.value)">
-            <option value="">— Dinner choice —</option>
+    const mealChks = isVIP
+      ? `<div class="chk-row">
+          <span class="vip-badge">ALL MEALS ✓</span>
+          <span class="chk-sep"></span>
+          <select class="dinner-inline${!m.satMealChoice?' missing':''}" onchange="updatePersonMealChoice(${i},this.value)">
+            <option value="">Dinner?</option>
             <option ${m.satMealChoice==='Beef'?'selected':''}>Beef</option>
             <option ${m.satMealChoice==='Fish'?'selected':''}>Fish</option>
             <option ${m.satMealChoice==='Chicken'?'selected':''}>Chicken</option>
             <option ${m.satMealChoice==='Vegetarian'?'selected':''}>Vegetarian</option>
-          </select>${mealMissing?'<span style="color:var(--red);font-size:0.6rem">⚠ needed</span>':''}` : ''}
-          <input type="text" class="allergy-inp" value="${m.allergy||''}" placeholder="Allergy / GF?" onchange="updatePersonAllergy(${i},this.value)"/>
-        </div></td>`;
+          </select>
+          <input class="allergy-inline" type="text" value="${m.allergy||''}" placeholder="Allergy?" onchange="updatePersonAllergy(${i},this.value)"/>
+        </div>`
+      : `<div class="chk-row">
+          ${c(m.thuDinner,   `updatePersonMeal(${i},'thuDinner',this.checked)`,   'Thu Din','82')}
+          ${c(m.friBrk,      `updatePersonMeal(${i},'friBrk',this.checked)`,      'Fri Brk','52')}
+          ${c(m.friLunch,    `updatePersonMeal(${i},'friLunch',this.checked)`,     'Fri Lun','52')}
+          ${c(m.friDinner,   `updatePersonMeal(${i},'friDinner',this.checked)`,    'Fri Din','82')}
+          ${c(m.satBrk,      `updatePersonMeal(${i},'satBrk',this.checked)`,       'Sat Brk','52')}
+          ${c(m.satLunch,    `updatePersonMeal(${i},'satLunch',this.checked)`,     'Sat Lun','52')}
+          ${c(m.satCocktail, `updatePersonMeal(${i},'satCocktail',this.checked)`,  'Banquet','140')}
+          ${c(m.childrenMeal,`updatePersonMeal(${i},'childrenMeal',this.checked)`,'Kids','45')}
+          ${m.satCocktail ? `<span class="chk-sep"></span>
+            <select class="dinner-inline${mealMissing?' missing':''}" onchange="updatePersonMealChoice(${i},this.value)">
+              <option value="">Dinner?</option>
+              <option ${m.satMealChoice==='Beef'?'selected':''}>Beef</option>
+              <option ${m.satMealChoice==='Fish'?'selected':''}>Fish</option>
+              <option ${m.satMealChoice==='Chicken'?'selected':''}>Chicken</option>
+              <option ${m.satMealChoice==='Vegetarian'?'selected':''}>Vegetarian</option>
+            </select>${mealMissing?'<span style="color:var(--red);font-size:0.6rem">⚠</span>':''}` : ''}
+          <input class="allergy-inline" type="text" value="${m.allergy||''}" placeholder="Allergy?" onchange="updatePersonAllergy(${i},this.value)"/>
+        </div>`;
 
     return `<tr class="${isVIP?'vip-locked':''}">
-      <td style="min-width:140px"><input type="text" value="${t.name||''}" placeholder="Full name" onchange="updatePersonName(${i},this.value)"/></td>
-      <td style="min-width:90px">
+      <td style="min-width:130px"><input type="text" value="${t.name||''}" placeholder="Full name" onchange="updatePersonName(${i},this.value)"/></td>
+      <td>
         <select onchange="updatePersonTicket(${i},'proam',this.value)">
           <option value="">—</option>
           <option ${t.proam==='Amateur'?'selected':''}>Amateur</option>
           <option ${t.proam==='Professional'?'selected':''}>Professional</option>
         </select>
       </td>
-      <td style="min-width:70px">
+      <td>
         <select onchange="updatePersonTicket(${i},'vipAlc',this.value)">
           <option value="">—</option>
           <option ${t.vipAlc==='VIP'?'selected':''}>VIP</option>
           <option ${t.vipAlc==='ALC'?'selected':''}>ALC</option>
         </select>
       </td>
-      <td style="text-align:center;padding:0 6px">
-        <label style="display:flex;align-items:center;gap:3px;font-size:0.65rem;cursor:pointer;justify-content:center;color:${t.firstTimer?'var(--gold)':'var(--muted)'}">
-          <input type="checkbox" ${t.firstTimer?'checked':''} onchange="updatePersonTicket(${i},'firstTimer',this.checked)" style="accent-color:var(--gold)"/>
-          ★ New
+      <td style="text-align:center">
+        <label style="display:flex;align-items:center;gap:2px;justify-content:center;font-size:0.6rem;cursor:pointer;color:${t.firstTimer?'var(--gold)':'#ccc'}">
+          <input type="checkbox" ${t.firstTimer?'checked':''} onchange="updatePersonTicket(${i},'firstTimer',this.checked)" style="width:10px;height:10px;accent-color:var(--gold)"/>★
         </label>
       </td>
-      ${sessionCell}
-      ${mealCell}
-      <td class="p-total" id="personTotal${i}">${isVIP?'<span style="font-size:0.6rem;color:var(--muted)">in pkg</span>':'$'+total.toFixed(2)}</td>
+      <td>${sessionChks}</td>
+      <td>${mealChks}</td>
+      <td class="p-total" id="personTotal${i}">${isVIP?'<span class="price-tag">pkg</span>':'$'+total.toFixed(2)}</td>
       <td><button class="p-remove" onclick="removePersonRow(${i})">✕</button></td>
     </tr>`;
   }).join('');
@@ -1518,14 +1537,10 @@ function renderPeopleList(d) {
   el.innerHTML = `
     <table class="people-table">
       <thead><tr>
-        <th>Name</th>
-        <th>Pro/Am</th>
-        <th>VIP/ALC</th>
-        <th style="text-align:center">New</th>
+        <th>Name</th><th>Pro/Am</th><th>VIP/ALC</th><th>★</th>
         <th>Sessions &amp; Purchases</th>
         <th>Meals</th>
-        <th>Total</th>
-        <th></th>
+        <th>$</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -1910,10 +1925,29 @@ function removeRow(section, index) {
 // ── SAVE ──
 
 let autoSaveTimer = null;
+let _unsavedChanges = false;
+
 function triggerAutoSave() {
+  _unsavedChanges = true;
+  // Show "unsaved" indicator immediately
+  const b = document.getElementById('saveBanner');
+  if (b) { b.textContent = '● Saving...'; b.classList.add('show'); b.style.background='#888'; }
   clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => saveState(), 1200);
+  autoSaveTimer = setTimeout(async () => {
+    await saveState();
+    _unsavedChanges = false;
+    if (b) { b.textContent = '✓ Saved'; b.style.background=''; }
+  }, 800);
 }
+
+// Warn if navigating away with unsaved changes
+window.addEventListener('beforeunload', e => {
+  if (_unsavedChanges) {
+    saveState(); // attempt immediate save
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 
 // ── MODAL ──
 function showModal(icon, title, body) {
@@ -3547,15 +3581,15 @@ function printDinnerLabels(comp, studioFilter) {
     .label-text { flex: 1; overflow: hidden; }
     .label-name {
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 15pt;
       font-style: normal;
       font-weight: 900;
       line-height: 1.2;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
       color: #111;
+      overflow: hidden;
     }
+    .label-name.short  { font-size: 15pt; white-space: nowrap; }
+    .label-name.medium { font-size: 12pt; white-space: nowrap; }
+    .label-name.long   { font-size: 9.5pt; white-space: normal; word-break: break-word; }
     .label-studio {
       font-family: 'Cormorant Garamond', Georgia, serif;
       font-size: 7.5pt;
@@ -3572,13 +3606,16 @@ function printDinnerLabels(comp, studioFilter) {
     }
   </style></head><body>
   <div class="sheet"><div class="label-grid">
-  ${labels.map(l => `<div class="label">
+  ${labels.map(l => {
+    const nameClass = l.name.length > 22 ? 'long' : l.name.length > 16 ? 'medium' : 'short';
+    return `<div class="label">
     <img class="label-logo" src="${LOGO_DATA_URL}" alt="FADS"/>
     <div class="label-text">
-      <div class="label-name">${l.name}</div>
+      <div class="label-name ${nameClass}">${l.name}</div>
       <div class="label-studio">${l.studio}</div>
     </div>
-  </div>`).join('')}
+  </div>`;
+  }).join('')}
   </div></div>
   <script>setTimeout(()=>window.print(),500);<\/script>
   </body></html>`);
@@ -3628,7 +3665,10 @@ function printRegistrationLabels(comp, studioFilter) {
     }
     .label-header { display: flex; align-items: center; gap: 0.1in; margin-bottom: 4px; }
     .label-logo { height: 0.35in; }
-    .label-name { font-size: 15pt; font-weight: bold; line-height: 1.1; color: #111; }
+    .label-name { font-weight: bold; line-height: 1.1; color: #111; }
+    .label-name.short  { font-size: 15pt; }
+    .label-name.medium { font-size: 12pt; }
+    .label-name.long   { font-size: 9.5pt; word-break: break-word; }
     .label-studio { font-size: 9.5pt; color: #444; margin-bottom: 4px; }
     .label-checks { display: flex; gap: 0.2in; align-items: center; }
     .check-item { display: flex; align-items: center; gap: 4px; font-size: 8.5pt; font-weight: bold; }
@@ -3642,11 +3682,13 @@ function printRegistrationLabels(comp, studioFilter) {
     }
   </style></head><body>
   <div class="sheet"><div class="label-grid">
-  ${labels.map(l=>`<div class="label">
+  ${labels.map(l=>{
+    const nc = l.name.length > 22 ? 'long' : l.name.length > 16 ? 'medium' : 'short';
+    return `<div class="label">
     <div class="label-header">
       <img class="label-logo" src="${LOGO_DATA_URL}" alt="FADS"/>
     </div>
-    <div class="label-name">${l.name}</div>
+    <div class="label-name ${nc}">${l.name}</div>
     <div class="label-studio">${l.studio}</div>
     <div class="label-checks">
       <div class="check-item"><div class="box ${l.isVip?'checked':''}"></div> VIP</div>
@@ -3654,7 +3696,7 @@ function printRegistrationLabels(comp, studioFilter) {
       <div class="check-item"><div class="box ${l.hasGift?'checked':''}"></div> WELCOME GIFT</div>
     </div>
     <div class="label-number"># <span class="num-line">&nbsp;</span></div>
-  </div>`).join('')}
+  </div>`;}).join('')}
   </div></div>
   <script>setTimeout(()=>window.print(),500);<\/script>
   </body></html>`);
@@ -6146,10 +6188,11 @@ function buildTableGroups(comp, overrides) {
 // Bottom row: y=530 (below floor)
 
 function buildSVG(groups, comp) {
-  const CW=1000, CH=600;
-  const FX=150, FY=100, FW=560, FH=320; // dance floor
-  const TR=22; // table circle radius — smaller
-  const PAL=['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e91e63','#ff9800','#607d8b','#795548','#9c27b0','#3f51b5','#009688','#f39c12','#1abc9c','#e74c3c','#3498db'];
+  const CW=1000, CH=660;
+  const FX=150, FY=120, FW=560, FH=300; // dance floor
+  const TR=17; // table circle radius — compact
+  const SP=46; // spacing between circles
+  const PAL=['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e91e63','#ff9800','#607d8b','#795548','#9c27b0','#3f51b5','#009688','#f39c12','#6c3483','#e74c3c','#3498db'];
   const colors={};
   groups.forEach((g,i)=>{ colors[g.label]=PAL[i%PAL.length]; });
 
@@ -6158,20 +6201,20 @@ function buildSVG(groups, comp) {
   groups.forEach(g=>g.tables.forEach(sz=>slots.push({label:g.label,size:sz,combined:g.combined})));
 
   // Zone definitions — NO left column (judges there)
-  // Top row: above dance floor, from x=155 to x=700, spacing 52
-  // Bottom row: below dance floor, same x range
-  // Right column: x=760, y from 110 to 410, spacing 52
-  const topSlots    = Math.floor((FW)/52);   // ~10
-  const botSlots    = Math.floor((FW)/52);   // ~10
-  const rightSlots  = Math.floor(FH/52);     // ~6
+  const topSlots   = Math.floor(FW/SP);      // top row above floor
+  const botSlots   = Math.floor(FW/SP);      // bottom row 1 below floor
+  const bot2Slots  = Math.floor(FW/SP);      // bottom row 2 (overflow)
+  const rightSlots = Math.floor(FH/SP);      // right column
 
   const positions=[];
   // Top row
-  for(let i=0;i<topSlots;i++) positions.push({cx: FX+TR+i*52, cy: FY-TR-12});
-  // Bottom row
-  for(let i=0;i<botSlots;i++) positions.push({cx: FX+TR+i*52, cy: FY+FH+TR+12});
+  for(let i=0;i<topSlots;i++)  positions.push({cx: FX+TR+i*SP, cy: FY-TR-10});
+  // Bottom row 1
+  for(let i=0;i<botSlots;i++)  positions.push({cx: FX+TR+i*SP, cy: FY+FH+TR+10});
   // Right column
-  for(let i=0;i<rightSlots;i++) positions.push({cx: FX+FW+TR+18, cy: FY+TR+i*52});
+  for(let i=0;i<rightSlots;i++) positions.push({cx: FX+FW+TR+14, cy: FY+TR+i*SP});
+  // Bottom row 2 (if needed)
+  for(let i=0;i<bot2Slots;i++) positions.push({cx: FX+TR+i*SP, cy: FY+FH+TR*3+22});
 
   const placed=[];
   slots.forEach((s,i)=>{ if(i<positions.length) placed.push({...s,...positions[i]}); });
@@ -6181,15 +6224,14 @@ function buildSVG(groups, comp) {
   const tablesSVG = placed.map(t=>{
     const c=colors[t.label]||'#888';
     const ab=abbrev(t.label);
-    // For combined, show abbreviated names stacked if two parts
     const parts=ab.split('/');
     const nameLines = parts.length===1
-      ? [`<text x="${t.cx}" y="${t.cy-4}" text-anchor="middle" font-size="8" font-weight="700" fill="#fff" font-family="Arial">${parts[0]}</text>`]
-      : [`<text x="${t.cx}" y="${t.cy-8}" text-anchor="middle" font-size="7" font-weight="700" fill="#fff" font-family="Arial">${parts[0]}</text>`,
-         `<text x="${t.cx}" y="${t.cy-1}" text-anchor="middle" font-size="7" font-weight="700" fill="#fff" font-family="Arial">${parts[1]||''}</text>`];
+      ? [`<text x="${t.cx}" y="${t.cy-3}" text-anchor="middle" font-size="7" font-weight="700" fill="#fff" font-family="Arial">${parts[0]}</text>`]
+      : [`<text x="${t.cx}" y="${t.cy-7}" text-anchor="middle" font-size="6" font-weight="700" fill="#fff" font-family="Arial">${parts[0]}</text>`,
+         `<text x="${t.cx}" y="${t.cy-1}" text-anchor="middle" font-size="6" font-weight="700" fill="#fff" font-family="Arial">${parts[1]||''}</text>`];
     return `<circle cx="${t.cx}" cy="${t.cy}" r="${TR}" fill="${c}" fill-opacity="0.9" stroke="#fff" stroke-width="1.5"/>
     ${nameLines.join('')}
-    <text x="${t.cx}" y="${t.cy+11}" text-anchor="middle" font-size="10" font-weight="900" fill="#fff" font-family="Arial">${t.size}</text>`;
+    <text x="${t.cx}" y="${t.cy+9}" text-anchor="middle" font-size="9" font-weight="900" fill="#fff" font-family="Arial">${t.size}</text>`;
   }).join('');
 
   // Judges panel — two vertical rectangles on far left
@@ -6199,9 +6241,9 @@ function buildSVG(groups, comp) {
     <text x="37" y="${FY+FH/2}" text-anchor="middle" font-size="8" fill="#8B6914" font-family="Arial" font-weight="700" transform="rotate(-90,37,${FY+FH/2})">JUDGES TABLE</text>
     <text x="81" y="${FY+FH/2}" text-anchor="middle" font-size="8" fill="#8B6914" font-family="Arial" font-weight="700" transform="rotate(-90,81,${FY+FH/2})">JUDGES TABLE</text>`;
 
-  // Overflow warning
+  // Any truly uncaptured overflow (shouldn't happen with 3 rows + right col)
   const overflowSVG = overflow.length
-    ? `<text x="${CW/2}" y="${CH-8}" text-anchor="middle" font-size="9" fill="#c0392b" font-family="Arial">⚠ ${overflow.length} tables don't fit — add more rows or reduce combining</text>`
+    ? `<text x="${CW/2}" y="${CH-6}" text-anchor="middle" font-size="9" fill="#c0392b" font-family="Arial">⚠ ${overflow.length} tables still don't fit — try reducing table count</text>`
     : '';
 
   return `<svg viewBox="0 0 ${CW} ${CH}" style="width:100%;background:#faf8f3;border:1px solid var(--border);border-radius:8px;display:block">
