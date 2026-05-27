@@ -1085,6 +1085,8 @@ async function loadState() {
     if (!appState.credentials[s]) appState.credentials[s] = s.toLowerCase().replace(/\s/g,'').replace(/\./g,'') + '1234';
   });
   if (!appState.visitingStudios) appState.visitingStudios = [];
+  // Remove any core studios that accidentally got added to visitingStudios
+  appState.visitingStudios = appState.visitingStudios.filter(v => !appState.studios.includes(v.name));
   if (!appState.data) appState.data = {};
 
   // Load each studio's data separately from Firebase — always get freshest copy
@@ -5040,11 +5042,7 @@ async function loadWestLoopData() {
   if (!confirm('Replace all West Loop data for Chicago Open 2026?')) return;
   const studio = 'West Loop'; const comp = 'Chicago Open 2026';
   const key = studio + '::' + comp;
-  if (!appState.visitingStudios) appState.visitingStudios = [];
-  if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
-    appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
-  }
+  // West Loop is a core studio — do NOT add to visitingStudios
   const data = {
     vip: [
       { name:'Cameron Gabehart', proam:'Professional', meal:'', allergy:'' },
@@ -5086,11 +5084,7 @@ async function loadWilmetteData() {
   if (!confirm('Replace all Wilmette data for Chicago Open 2026?')) return;
   const studio = 'Wilmette'; const comp = 'Chicago Open 2026';
   const key = studio + '::' + comp;
-  if (!appState.visitingStudios) appState.visitingStudios = [];
-  if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
-    appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
-  }
+  // Wilmette is a core studio — do NOT add to visitingStudios
   const data = {
     vip: [
       // 3 VIP Full Packages @$695 each
