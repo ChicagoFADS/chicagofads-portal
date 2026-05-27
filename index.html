@@ -1643,7 +1643,7 @@ function refreshPersonCard(i, d) {
 
 function updatePeopleTotals(d) {
   const ticketTotal = (d.tickets||[]).reduce((s,r)=>s+calcTicketFee(r),0);
-  const mealTotal   = (d.meals||[]).reduce((s,r)=>s+calcMealFee(r),0);
+  const mealTotal   = calcAlcMealRevenue(d);
   const el1 = document.getElementById('peopleTotalTickets');
   const el2 = document.getElementById('peopleTotalMeals');
   const el3 = document.getElementById('peopleTotalCombined');
@@ -1833,6 +1833,16 @@ function calcMealFee(r) {
   return total;
 }
 
+// Only sum meal fees for ALC people (VIP meals included in $695 package)
+function calcAlcMealRevenue(d) {
+  return (d.meals||[]).reduce((sum, r) => {
+    const ticket = (d.tickets||[]).find(t => t.name === r.name);
+    if (ticket && ticket.vipAlc === 'VIP') return sum; // VIP meals in package
+    return sum + calcMealFee(r);
+  }, 0);
+}
+
+
 function renderMealsTable(rows) {
   const tbody = document.getElementById('mealsBody');
   tbody.innerHTML = '';
@@ -1910,7 +1920,7 @@ function refreshMealRow(i) {
 
 function updateMealsTotal() {
   const d = getStudioData(currentStudio, currentComp);
-  const total = d.meals.reduce((s, r) => s + calcMealFee(r), 0);
+  const total = calcAlcMealRevenue(d);
   document.getElementById('mealsTotalVal').textContent = '$' + total.toFixed(2);
 }
 
@@ -1998,7 +2008,7 @@ async function showBalancePopupIfOwed(studio, comp) {
     const vipRev    = d.vip.filter(r=>r.name).length * 695;
     const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
     const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-    const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+    const mealRev   = calcAlcMealRevenue(d);
     const totalOwed = vipRev + ticketRev + entryRev + mealRev;
     if (totalOwed <= 0) return;
     const payments = await loadPayments(studio, comp);
@@ -2138,7 +2148,7 @@ function renderStudioSummary() {
 
   // ALC meal counts
   const alcMealCount = d.meals.filter(r => r.name).length;
-  const mealRev    = d.meals.reduce((s, r) => s + calcMealFee(r), 0);
+  const mealRev    = calcAlcMealRevenue(d);
 
   // Total headcount — VIPs + ALC (use max of ticket/meal ALC count since same person may appear in both)
   const alcPeople  = Math.max(alcCount, alcMealCount);
@@ -2297,7 +2307,7 @@ function getCompData(comp) {
     const vipRev = vipCount * 695;
     const ticketRev = d.tickets.reduce((sum,r)=>sum+calcTicketFee(r),0);
     const entryRev = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-    const mealRev = d.meals.reduce((sum,r)=>sum+calcMealFee(r),0);
+    const mealRev = calcAlcMealRevenue(d);
     const ticketHolders = d.tickets.filter(r=>r.name).length;
     const mealPkgs = d.meals.filter(r=>r.name).length;
     // VIPs get welcome gift + all meals automatically
@@ -2600,7 +2610,7 @@ function renderMealsTab() {
     const kids = d.meals.filter(r=>r.childrenMeal).length;
     totalKids += kids;
     row['Kids'] = kids;
-    Object.keys(sessionTotals).forEach(k => sessionTotals[k] += d.tickets.filter(r=>r[k]).length);
+    Object.keys(sessionTotals).forEach(k => { sessionTotals[k] += d.tickets.filter(r=>r[k]).length + d.vip.filter(r=>r.name).length; });
     // dinner choices — ALC meals
     d.meals.filter(r=>{const t=d.tickets.find(t=>t.name===r.name);return !(t&&t.vipAlc==='VIP')&&r.satCocktail;}).forEach(r => {
       const ch = r.childrenMeal ? 'Kids Meal' : (r.satMealChoice||'');
@@ -2688,7 +2698,7 @@ function renderCompareTab() {
       const vipR  = d.vip.filter(r=>r.name).length * 695;
       const tickR = d.tickets.reduce((sum,r)=>sum+calcTicketFee(r),0);
       const entR  = calcCompEntriesTotal(d.compEntries, c, d.entryOverride);
-      const mealR = d.meals.reduce((sum,r)=>sum+calcMealFee(r),0);
+      const mealR = calcAlcMealRevenue(d);
       return vipR+tickR+entR+mealR;
     });
     return { studio:s, totals };
@@ -3214,7 +3224,7 @@ async function renderVisitingTab() {
       const ticketCount = d.tickets.filter(r=>r.name).length;
       const mealCount = d.meals.filter(r=>r.name).length;
       const total = vipCount*695 + d.tickets.reduce((s,r)=>s+calcTicketFee(r),0) +
-                    calcCompEntriesTotal(d.compEntries, comp, d.entryOverride) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+                    calcCompEntriesTotal(d.compEntries, comp, d.entryOverride) + calcAlcMealRevenue(d);
       const payments = await loadPayments(name, comp);
       const totalPaid = payments.reduce((s,p)=>s+p.amount,0);
       const balance = total - totalPaid;
@@ -3276,7 +3286,7 @@ async function renderVisitingTab() {
     for (const name of visiting) {
       const d = getStudioData(name, comp);
       const t = d.vip.filter(r=>r.name).length*695 + d.tickets.reduce((s,r)=>s+calcTicketFee(r),0) +
-                calcCompEntriesTotal(d.compEntries, comp, d.entryOverride) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+                calcCompEntriesTotal(d.compEntries, comp, d.entryOverride) + calcAlcMealRevenue(d);
       const pmts = await loadPayments(name, comp);
       const paid = pmts.reduce((s,p)=>s+p.amount,0);
       vtotalOwed += t; vtotalPaid += paid;
@@ -3346,10 +3356,9 @@ function renderVisitingDataEntry(comp) {
     </div>
 
     <div class="tabs" id="visitingDataTabs">
-      <button class="tab active" onclick="switchVisitingTab('vvip')">VIP</button>
-      <button class="tab" onclick="switchVisitingTab('vtickets')">Tickets</button>
+      <button class="tab active" onclick="switchVisitingTab('vvip')">VIP Reservations</button>
+      <button class="tab" onclick="switchVisitingTab('vpeople')">People</button>
       <button class="tab" onclick="switchVisitingTab('vcompentries')">Entries</button>
-      <button class="tab" onclick="switchVisitingTab('vmeals')">Meals</button>
     </div>
 
     <div class="tab-content active" id="tab-vvip">
@@ -3366,27 +3375,30 @@ function renderVisitingDataEntry(comp) {
         </div>
       </div>
     </div>
-    <div class="tab-content" id="tab-vtickets">
+
+    <div class="tab-content" id="tab-vpeople">
       <div class="section-card">
-        <div class="section-header"><div class="section-title">Session Tickets &amp; Welcome Gift</div>
-          <button class="btn btn-sm btn-outline" onclick="addTicketRow()">+ Add Row</button></div>
-        <div class="section-body" style="overflow-x:auto">
-          <table class="data-table"><thead><tr>
-            <th>#</th><th>Name</th><th>Pro/Am</th><th>Newcomer?</th>
-            <th>Thu Mat<br><span style="color:var(--muted);font-size:0.55rem">$15</span></th>
-            <th>Thu Eve<br><span style="color:var(--muted);font-size:0.55rem">$20</span></th>
-            <th>Fri Mat<br><span style="color:var(--muted);font-size:0.55rem">$15</span></th>
-            <th>Fri Eve<br><span style="color:var(--muted);font-size:0.55rem">$25</span></th>
-            <th>Sat Mat<br><span style="color:var(--muted);font-size:0.55rem">$15</span></th>
-            <th>Welcome Gift<br><span style="color:var(--muted);font-size:0.55rem">$48</span></th>
-            <th>VIP/ALC</th><th>Total</th><th></th>
-          </tr></thead><tbody id="ticketsBody"></tbody>
-          <tfoot><tr class="total-row"><td colspan="10" style="text-align:right;font-size:0.65rem;letter-spacing:0.1em">TOTAL TICKET FEES</td><td id="ticketsTotalVal" colspan="2">$0.00</td><td></td></tr></tfoot>
-          </table>
-          <button class="add-row-btn" onclick="addTicketRow()">+ Add Person</button>
+        <div class="section-header">
+          <div class="section-title">ALC People — Sessions &amp; Meals</div>
+          <div style="display:flex;gap:0.5rem">
+            <button class="btn btn-sm btn-success" onclick="saveAll()">Save Data</button>
+            <button class="btn btn-sm btn-outline" onclick="addPersonRow()">+ Add Person</button>
+          </div>
+        </div>
+        <div class="section-body">
+          <div id="peopleList"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+            <button class="add-row-btn" style="margin:0" onclick="addPersonRow()">+ Add Person</button>
+            <div style="font-size:0.7rem;color:var(--muted)">
+              Tickets: <strong id="peopleTotalTickets">$0.00</strong> &nbsp;·&nbsp;
+              Meals: <strong id="peopleTotalMeals">$0.00</strong> &nbsp;·&nbsp;
+              Combined: <strong id="peopleTotalCombined" style="color:var(--gold)">$0.00</strong>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+
     <div class="tab-content" id="tab-vcompentries">
       <div class="section-card">
         <div class="section-header"><div class="section-title">Competition Entry Fees — by Division</div></div>
@@ -3400,43 +3412,34 @@ function renderVisitingDataEntry(comp) {
         </div>
       </div>
     </div>
-    <div class="tab-content" id="tab-vmeals">
-      <div class="section-card">
-        <div class="section-header"><div class="section-title">Meal Packages</div>
-          <button class="btn btn-sm btn-outline" onclick="addMealRow()">+ Add Row</button></div>
-        <div class="section-body" style="overflow-x:auto">
-          <table class="data-table"><thead><tr>
-            <th>#</th><th>Name</th><th>Pro/Am</th>
-            <th>Thu Din<br><span style="color:var(--muted);font-size:0.55rem">$82</span></th>
-            <th>Fri Brk<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-            <th>Fri Lun<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-            <th>Fri Din<br><span style="color:var(--muted);font-size:0.55rem">$82</span></th>
-            <th>Sat Brk<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-            <th>Sat Lun<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-            <th>Sat Banquet<br><span style="color:var(--muted);font-size:0.55rem">$140/$45</span></th>
-            <th>Choice</th><th>Kids?</th><th>Allergy</th><th>Total</th><th></th>
-          </tr></thead><tbody id="mealsBody"></tbody>
-          <tfoot><tr class="total-row"><td colspan="12" style="text-align:right;font-size:0.65rem;letter-spacing:0.1em">TOTAL MEAL REVENUE</td>
-            <td id="mealsTotalVal" colspan="2">$0.00</td></tr></tfoot>
-          </table>
-          <button class="add-row-btn" onclick="addMealRow()">+ Add Person</button>
-        </div>
-      </div>
-    </div>
   `;
 
   renderVipTable(d.vip);
-  renderTicketsTable(d.tickets);
+  renderPeopleList(d);
   renderCompEntriesTable(d.compEntries);
   initEntryMode();
-  renderMealsTable(d.meals);
 }
 
 function switchVisitingTab(name) {
   document.querySelectorAll('#visitingDataTabs .tab').forEach(t=>t.classList.remove('active'));
-  ['vvip','vtickets','vcompentries','vmeals'].forEach(n=>{ const el=document.getElementById('tab-'+n); if(el) el.classList.remove('active'); });
-  event.target.classList.add('active');
-  document.getElementById('tab-'+name).classList.add('active');
+  ['vvip','vpeople','vcompentries'].forEach(n=>{ const el=document.getElementById('tab-'+n); if(el) el.classList.remove('active'); });
+  const activeBtn = document.querySelector(`#visitingDataTabs .tab[onclick*="'${name}'"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+  const tab = document.getElementById('tab-'+name);
+  if (tab) tab.classList.add('active');
+  if (name === 'vpeople') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderPeopleList(d);
+  }
+  if (name === 'vvip') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderVipTable(d.vip);
+  }
+  if (name === 'vcompentries') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderCompEntriesTable(d.compEntries);
+    initEntryMode();
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3479,7 +3482,7 @@ function generateRegistrationPDF(studio, comp) {
   const vipRev    = vipCount * 695;
   const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
   const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-  const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+  const mealRev   = calcAlcMealRevenue(d);
   const grandTotal = vipRev + ticketRev + entryRev + mealRev;
   const totalGifts = vipCount + d.tickets.filter(r=>r.gift).length;
 
@@ -3594,8 +3597,8 @@ function printDinnerLabels(comp, studioFilter) {
     d.vip.filter(r=>r.name).forEach(r => {
       labels.push({ name: r.name, studio, meal: r.meal||'', type:'VIP' });
     });
-    // ALC with Saturday Banquet selected
-    d.meals.filter(r=>r.name && r.satCocktail).forEach(r => {
+    // ALC with Saturday Banquet selected (skip if already listed as VIP)
+    d.meals.filter(r=>r.name && r.satCocktail && !d.vip.find(v=>v.name&&v.name.trim().toLowerCase()===r.name.trim().toLowerCase())).forEach(r => {
       labels.push({ name: r.name, studio, meal: r.childrenMeal?'Kids Meal':(r.satMealChoice||''), type:'ALC' });
     });
   });
@@ -3822,7 +3825,7 @@ async function renderPaymentsTable() {
       const vipRev    = d.vip.filter(r=>r.name).length * 695;
       const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
       const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-      const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+      const mealRev   = calcAlcMealRevenue(d);
       const totalOwed = vipRev + ticketRev + entryRev + mealRev;
 
       const payments = await loadPayments(studio, comp);
@@ -5303,7 +5306,7 @@ async function generateStatusSummaryPDF() {
     const vipRev    = d.vip.filter(r=>r.name).length * 695;
     const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
     const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-    const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+    const mealRev   = calcAlcMealRevenue(d);
     const totalOwed = vipRev + ticketRev + entryRev + mealRev;
     if (totalOwed === 0) continue;
 
@@ -5730,7 +5733,7 @@ async function generateStudioSummaryPDF(studio, comp) {
   const vipRev     = vipCount * 695;
   const ticketRev  = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
   const entryRev   = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-  const mealRev    = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+  const mealRev    = calcAlcMealRevenue(d);
   const totalOwed  = vipRev + ticketRev + entryRev + mealRev;
   const totalPaid  = payments.reduce((s,p)=>s+p.amount,0);
   const balance    = totalOwed - totalPaid;
