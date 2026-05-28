@@ -452,6 +452,38 @@
   .p-remove:hover { color:var(--red); }
   .price-tag { color:var(--muted); font-size:0.58rem; }
 
+  /* ── DANCE ENTRIES ── */
+  .de-row {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    background: #fff;
+    overflow: hidden;
+  }
+  .de-row.duplicate { border-color: var(--red); background: #fff8f8; }
+  .de-row-header {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.75rem; background: #faf8f3;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .de-row-header select, .de-row-header input {
+    font-size: 0.72rem; border: 1px solid var(--border);
+    border-radius: 4px; padding: 3px 6px; background: #fff;
+    color: #1a1a1a; cursor: pointer;
+  }
+  .de-dances {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    padding: 0.5rem 0.75rem; align-items: center;
+  }
+  .de-dance-btn {
+    font-size: 0.65rem; padding: 2px 8px; border-radius: 3px;
+    border: 1px solid var(--border); background: #fff;
+    cursor: pointer; color: #555; transition: all 0.1s;
+  }
+  .de-dance-btn.selected { background: var(--gold); color: #fff; border-color: var(--gold); font-weight: 700; }
+  .de-dance-btn.blocked { background: #fee; color: #c0392b; border-color: #c0392b; cursor: not-allowed; text-decoration: line-through; }
+  .de-dup-msg { font-size: 0.62rem; color: var(--red); padding: 0 0.75rem 0.4rem; }
+
   /* ── STAT CARDS ── */
   .stats-grid {
     display: grid;
@@ -750,7 +782,8 @@
     <div class="tabs">
       <button class="tab active" onclick="switchTab('vip')">VIP Reservations</button>
       <button class="tab" onclick="switchTab('tickets')">People</button>
-      <button class="tab" onclick="switchTab('compentries')">Entries</button>
+      <button class="tab" onclick="switchTab('danceentries')">💃 Dance Entries</button>
+      <button class="tab" onclick="switchTab('compentries')">Entries $</button>
       <button class="tab" onclick="switchTab('documents')">Documents</button>
       <button class="tab" onclick="switchTab('summary')">Summary</button>
     </div>
@@ -812,6 +845,29 @@
               Tickets: <strong id="peopleTotalTickets">$0.00</strong> &nbsp;·&nbsp;
               Meals: <strong id="peopleTotalMeals">$0.00</strong> &nbsp;·&nbsp;
               Combined: <strong id="peopleTotalCombined" style="color:var(--gold)">$0.00</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DANCE ENTRIES TAB -->
+    <div class="tab-content" id="tab-danceentries">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">💃 Dance Entry Submissions</div>
+          <div style="display:flex;gap:0.5rem">
+            <button class="btn btn-sm btn-success" onclick="saveAll()">Save Data</button>
+            <button class="btn btn-sm btn-outline" onclick="addDanceEntry()">+ Add Entry</button>
+          </div>
+        </div>
+        <div class="section-body">
+          <p style="font-size:0.65rem;color:var(--muted);margin-bottom:0.75rem">Enter each dance individually. Duplicates (same student + teacher + level + dance) are automatically blocked.</p>
+          <div id="danceEntriesList"></div>
+          <div style="margin-top:0.75rem;display:flex;justify-content:space-between;align-items:center">
+            <button class="add-row-btn" style="margin:0" onclick="addDanceEntry()">+ Add Entry</button>
+            <div style="font-size:0.7rem;color:var(--muted)">
+              Total entries: <strong id="danceEntryCount" style="color:var(--gold)">0</strong>
             </div>
           </div>
         </div>
@@ -1164,10 +1220,11 @@ function getStudioData(studio, comp) {
   // Migrate old field names
   if (d.entries && !d.tickets) { d.tickets = d.entries; delete d.entries; }
   // Always ensure all arrays exist
-  if (!d.vip)         d.vip         = [];
-  if (!d.tickets)     d.tickets     = [];
-  if (!d.meals)       d.meals       = [];
-  if (!d.compEntries) d.compEntries = [];
+  if (!d.vip)          d.vip         = [];
+  if (!d.tickets)      d.tickets     = [];
+  if (!d.meals)        d.meals       = [];
+  if (!d.compEntries)  d.compEntries = [];
+  if (!d.danceEntries) d.danceEntries = [];
   return d;
 }
 
@@ -1257,6 +1314,10 @@ function switchTab(name) {
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'summary')    renderStudioSummary();
   if (name === 'documents')  renderStudioDocs();
+  if (name === 'danceentries') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderDanceEntries(d);
+  }
   if (name === 'tickets') {
     const d = getStudioData(currentStudio, currentComp);
     renderPeopleList(d);
@@ -1948,8 +2009,7 @@ function removeRow(section, index) {
   const d = getStudioData(currentStudio, currentComp);
   d[section].splice(index, 1);
   if (section === 'vip') renderVipTable(d.vip);
-  if (section === 'tickets') renderTicketsTable(d.tickets);
-  if (section === 'meals') renderMealsTable(d.meals);
+  if (section === 'tickets' || section === 'meals') renderPeopleList(d);
   triggerAutoSave();
 }
 
@@ -3612,13 +3672,20 @@ function printDinnerLabels(comp, studioFilter) {
     @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&display=swap');
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family: 'Cormorant Garamond', Georgia, serif; background: white; }
-    .sheet { width: 8.5in; padding: 0.5in 0.19in; }
+    .sheet {
+      width: 8.5in; height: 11in;
+      padding: 0.5in 0.19in 0;
+      page-break-after: always;
+      overflow: hidden;
+    }
+    .sheet:last-child { page-break-after: avoid; }
     .label-grid { display: grid; grid-template-columns: repeat(3, 2.625in); gap: 0 0.125in; }
     .label {
       width: 2.625in; height: 1in;
       display: flex; align-items: center;
       padding: 0.06in 0.1in; gap: 0.08in;
       overflow: hidden;
+      page-break-inside: avoid;
     }
     .label-logo {
       width: 0.45in; height: 0.45in; flex-shrink: 0;
@@ -3647,21 +3714,29 @@ function printDinnerLabels(comp, studioFilter) {
     }
     @media print {
       @page { size: letter; margin: 0; }
-      .sheet { padding: 0.5in 0.19in; }
+      body { margin: 0; }
     }
   </style></head><body>
-  <div class="sheet"><div class="label-grid">
-  ${labels.map(l => {
-    const nameClass = l.name.length > 22 ? 'long' : l.name.length > 16 ? 'medium' : 'short';
-    return `<div class="label">
-    <img class="label-logo" src="${LOGO_DATA_URL}" alt="FADS"/>
-    <div class="label-text">
-      <div class="label-name ${nameClass}">${l.name}</div>
-      <div class="label-studio">${l.studio}</div>
-    </div>
-  </div>`;
-  }).join('')}
-  </div></div>
+  ${(() => {
+    const pages = [];
+    for (let i = 0; i < labels.length; i += 30) pages.push(labels.slice(i, i+30));
+    return pages.map((page, pi) => {
+      // Pad to multiple of 3
+      while (page.length % 3 !== 0) page.push(null);
+      const labelHTML = page.map(l => {
+        if (!l) return `<div class="label"></div>`;
+        const nameClass = l.name.length > 22 ? 'long' : l.name.length > 16 ? 'medium' : 'short';
+        return `<div class="label">
+          <img class="label-logo" src="${LOGO_DATA_URL}" alt="FADS"/>
+          <div class="label-text">
+            <div class="label-name ${nameClass}">${l.name}</div>
+            <div class="label-studio">${l.studio}</div>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="sheet"><div class="label-grid">${labelHTML}</div></div>`;
+    }).join('');
+  })()}
   <script>setTimeout(()=>window.print(),500);<\/script>
   </body></html>`);
   w.document.close();
@@ -3695,55 +3770,89 @@ function printRegistrationLabels(comp, studioFilter) {
   });
 
   const w = window.open('','_blank');
+
+  // Chunk labels into pages of 10 (2 cols × 5 rows)
+  const pages = [];
+  for (let i = 0; i < labels.length; i += 10) pages.push(labels.slice(i, i+10));
+  // Pad last page to even number
+  if (pages.length && pages[pages.length-1].length % 2 !== 0) pages[pages.length-1].push(null);
+
+  const pagesHTML = pages.map((page, pi) => {
+    const rows = [];
+    for (let r = 0; r < page.length; r += 2) {
+      const cells = [page[r], page[r+1]].map(l => {
+        if (!l) return `<div class="label"></div>`;
+        const nc = l.name.length > 22 ? 'long' : l.name.length > 16 ? 'medium' : 'short';
+        return `<div class="label">
+          <div class="label-header"><img class="label-logo" src="${LOGO_DATA_URL}" alt="FADS"/></div>
+          <div class="label-name ${nc}">${l.name}</div>
+          <div class="label-studio">${l.studio}</div>
+          <div class="label-checks">
+            <div class="check-item"><div class="box ${l.isVip?'checked':''}"></div> VIP</div>
+            <div class="check-item"><div class="box ${l.isAlc?'checked':''}"></div> ALA-CARTE</div>
+            <div class="check-item"><div class="box ${l.hasGift?'checked':''}"></div> WELCOME GIFT</div>
+          </div>
+          <div class="label-number"># <span class="num-line">&nbsp;</span></div>
+        </div>`;
+      }).join('');
+      rows.push(`<div class="label-row">${cells}</div>`);
+    }
+    return `<div class="sheet${pi < pages.length-1 ? ' page-break' : ''}">${rows.join('')}</div>`;
+  }).join('');
+
   w.document.write(`<!DOCTYPE html><html><head>
   <title>Registration Labels</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family: Arial, sans-serif; background: white; }
-    .sheet { width: 8.5in; padding: 0.5in 0.15in; }
-    .label-grid { display: grid; grid-template-columns: repeat(2, 4in); gap: 0 0.19in; }
-    .label {
-      width: 4in; height: 2in;
-      padding: 0.15in 0.18in;
-      display: flex; flex-direction: column; justify-content: center;
-      gap: 4px;
+    /* Avery 5163: 8.5x11, top margin 0.5in, left 0.15in, 2 cols x 5 rows */
+    .sheet {
+      width: 8.5in;
+      height: 11in;
+      padding: 0.5in 0.15in 0 0.15in;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    .label-header { display: flex; align-items: center; gap: 0.1in; margin-bottom: 4px; }
-    .label-logo { height: 0.35in; }
-    .label-name { font-weight: bold; line-height: 1.1; color: #111; }
-    .label-name.short  { font-size: 15pt; }
-    .label-name.medium { font-size: 12pt; }
-    .label-name.long   { font-size: 9.5pt; word-break: break-word; }
-    .label-studio { font-size: 9.5pt; color: #444; margin-bottom: 4px; }
-    .label-checks { display: flex; gap: 0.2in; align-items: center; }
-    .check-item { display: flex; align-items: center; gap: 4px; font-size: 8.5pt; font-weight: bold; }
-    .box { width: 11px; height: 11px; border: 1.5px solid #111; display: inline-block; flex-shrink: 0; position: relative; }
-    .box.checked::after { content: ""; position: absolute; top: 1px; left: 2px; width: 5px; height: 7px; border-right: 2px solid #111; border-bottom: 2px solid #111; transform: rotate(45deg); }
-    .label-number { font-size: 8.5pt; margin-top: 6px; color: #333; display: flex; align-items: center; gap: 4px; }
-    .num-line { display: inline-block; width: 1.3in; border-bottom: 1px solid #111; }
+    .page-break { page-break-after: always; }
+    .label-row {
+      display: flex;
+      height: 2in;
+      flex-shrink: 0;
+    }
+    .label {
+      width: 4in;
+      height: 2in;
+      padding: 0.1in 0.15in;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 1px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .label:first-child { margin-right: 0.19in; }
+    .label-header { display: flex; align-items: center; gap: 0.06in; margin-bottom: 1px; }
+    .label-logo { height: 0.22in; }
+    .label-name { font-weight: bold; line-height: 1.15; color: #111; }
+    .label-name.short  { font-size: 13pt; }
+    .label-name.medium { font-size: 10.5pt; }
+    .label-name.long   { font-size: 8.5pt; word-break: break-word; line-height: 1.2; }
+    .label-studio { font-size: 7.5pt; color: #555; margin-top: 1px; }
+    .label-checks { display: flex; gap: 0.12in; align-items: center; margin-top: 3px; }
+    .check-item { display: flex; align-items: center; gap: 3px; font-size: 7pt; font-weight: bold; white-space: nowrap; }
+    .box { width: 9px; height: 9px; border: 1.5px solid #111; display: inline-block; flex-shrink: 0; position: relative; }
+    .box.checked::after { content: ""; position: absolute; top: 0px; left: 1px; width: 4px; height: 6px; border-right: 2px solid #111; border-bottom: 2px solid #111; transform: rotate(45deg); }
+    .label-number { font-size: 7pt; margin-top: 3px; color: #333; display: flex; align-items: center; gap: 4px; }
+    .num-line { display: inline-block; width: 1.1in; border-bottom: 1px solid #111; }
     @media print {
       @page { size: letter; margin: 0; }
-      .sheet { padding: 0.5in 0.15in; }
+      body { background: white; margin: 0; padding: 0; }
+      .page-break { page-break-after: always; }
     }
   </style></head><body>
-  <div class="sheet"><div class="label-grid">
-  ${labels.map(l=>{
-    const nc = l.name.length > 22 ? 'long' : l.name.length > 16 ? 'medium' : 'short';
-    return `<div class="label">
-    <div class="label-header">
-      <img class="label-logo" src="${LOGO_DATA_URL}" alt="FADS"/>
-    </div>
-    <div class="label-name ${nc}">${l.name}</div>
-    <div class="label-studio">${l.studio}</div>
-    <div class="label-checks">
-      <div class="check-item"><div class="box ${l.isVip?'checked':''}"></div> VIP</div>
-      <div class="check-item"><div class="box ${l.isAlc?'checked':''}"></div> ALA-CARTE</div>
-      <div class="check-item"><div class="box ${l.hasGift?'checked':''}"></div> WELCOME GIFT</div>
-    </div>
-    <div class="label-number"># <span class="num-line">&nbsp;</span></div>
-  </div>`;}).join('')}
-  </div></div>
-  <script>setTimeout(()=>window.print(),500);<\/script>
+  ${pagesHTML}
+  <script>setTimeout(()=>window.print(),400);<\/script>
   </body></html>`);
   w.document.close();
 }
@@ -5630,20 +5739,19 @@ function printCheckLabels(section) {
 
   if (section === 'proDivisions' || section === 'all') {
     d.proDivisions.forEach(r => {
-      // Leader check
-      if (r.leaderName || r.leaderCheck || r.leaderAmt) {
-        addLabel(r.leaderName, `${r.division} — ${r.place} (Leader)`, r.leaderCheck, '');
-      }
-      // Follower check
-      if (r.followerName || r.followerCheck || r.followerAmt) {
-        addLabel(r.followerName, `${r.division} — ${r.place} (Follower)`, r.followerCheck, '');
+      // Envelope label — just division + place, no names needed
+      if (r.division || r.place) {
+        addLabel(r.division, r.place, r.leaderCheck||r.followerCheck||r.checkNum||'', '');
       }
     });
   }
 
   if (section === 'topTeachers' || section === 'all') {
     d.topTeachers.forEach(r => {
-      addLabel(r.name, `${r.category} — ${r.place}`, r.checkNum, '');
+      // Envelope label — just category + place, no names
+      if (r.category || r.place) {
+        addLabel(r.category, r.place, r.checkNum||'', '');
+      }
     });
   }
 
@@ -5663,24 +5771,30 @@ function printCheckLabels(section) {
   const labelCSS = `
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family: Arial, sans-serif; }
-    .page { width:8.5in; padding: 0.5in 0.19in 0; }
-    .row  { display:flex; margin-bottom:0; }
+    .page {
+      width: 8.5in; height: 11in;
+      padding: 0.5in 0.19in 0;
+      page-break-after: always;
+      overflow: hidden;
+    }
+    .page:last-child { page-break-after: avoid; }
+    .row  { display: flex; margin-bottom: 0; height: 1in; }
     .label {
       width: 2.625in; height: 1in;
-      padding: 0.1in 0.15in;
+      padding: 0.08in 0.12in;
       overflow: hidden;
       display: flex; flex-direction: column; justify-content: center;
+      page-break-inside: avoid;
     }
     .label:not(:last-child) { margin-right: 0.125in; }
-    .comp  { font-size: 7px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
-    .payto { font-size: 11px; font-weight: 700; color: #111; line-height: 1.2; }
-    .ford  { font-size: 8.5px; color: #444; margin-top: 2px; line-height: 1.2; }
-    .check { font-size: 8px; color: #666; margin-top: 3px; }
-    .amt   { font-size: 11px; font-weight: 700; color: #8B6914; margin-top: 2px; }
+    .comp  { font-size: 7px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1px; }
+    .payto { font-size: 10px; font-weight: 700; color: #111; line-height: 1.25; }
+    .ford  { font-size: 9px; color: #8B6914; font-weight: 700; margin-top: 2px; line-height: 1.2; }
+    .check { font-size: 7.5px; color: #666; margin-top: 2px; }
+    .amt   { font-size: 10px; font-weight: 700; color: #8B6914; margin-top: 2px; }
     @media print {
-      body { margin:0; }
-      .page { page-break-after: always; }
-      .page:last-child { page-break-after: avoid; }
+      @page { size: letter; margin: 0; }
+      body { margin: 0; }
     }
   `;
 
@@ -6550,6 +6664,231 @@ function printSetupDiagram() {
 }
 
 
+// ─── DANCE ENTRIES ───
+
+const DANCE_STYLES = {
+  'American Smooth':   { dances: ['WA','TA','FT','VW'], label: 'Am. Smooth' },
+  'American Rhythm':   { dances: ['CC','R','ECS','BOL','MA'], label: 'Am. Rhythm' },
+  'Int\'l Ballroom':   { dances: ['WA','TA','VW','FT','QS'], label: 'Int\'l Ballroom' },
+  'Int\'l Latin':      { dances: ['CC','SA','R','PD','J'], label: 'Int\'l Latin' },
+  'Nightclub':         { dances: ['H','WCS','NC2S','SAL','BAC'], label: 'Nightclub' },
+  'Country':           { dances: ['CW','CC','ECS','WCS','TS'], label: 'Country' },
+  'Smooth Showcase':   { dances: ['SHOWCASE'], label: 'Showcase' },
+  'Solo':              { dances: ['SOLO'], label: 'Solo' },
+};
+
+const AGE_CATS = ['PT1','PT2','J1','J2','Youth A','A+','A1','A2','A3','B1','B2','B3','C1','C2','C3'];
+
+// Age category order for "one up one down" rule
+const AGE_ORDER = {'PT1':0,'PT2':1,'J1':2,'J2':3,'Youth A':4,'A+':5,'A1':6,'A2':7,'A3':8,'B1':9,'B2':10,'B3':11,'C1':12,'C2':13,'C3':14};
+
+const LEVELS = [
+  { num:1,  label:'1 — Social Foundation',         group:'Group 1' },
+  { num:2,  label:'2 — Beginners Bronze',           group:'Group 1' },
+  { num:3,  label:'3 — Newcomers Bronze',           group:'Group 1' },
+  { num:4,  label:'4 — Preliminary Bronze Closed',  group:'Group 2' },
+  { num:5,  label:'5 — Intermediate Bronze Closed', group:'Group 2' },
+  { num:6,  label:'6 — Senior Bronze Closed',       group:'Group 3' },
+  { num:7,  label:'7 — Full Bronze Closed',         group:'Group 3' },
+  { num:8,  label:'8 — Preliminary Silver Closed',  group:'Group 4' },
+  { num:9,  label:'9 — Intermediate Silver Closed', group:'Group 4' },
+  { num:'9A',label:'9A — Senior Silver Closed',     group:'Group 5' },
+  { num:10, label:'10 — Full Silver Closed',        group:'Group 5' },
+  { num:11, label:'11 — Beginners Gold Closed',     group:'Group 6' },
+  { num:12, label:'12 — Intermediate Gold Closed',  group:'Group 6' },
+  { num:13, label:'13 — Full Gold Closed',          group:'Group 7' },
+  { num:14, label:'14 — Intermediate Bronze Open',  group:'Group 2' },
+  { num:15, label:'15 — Full Bronze Open',          group:'Group 3' },
+  { num:16, label:'16 — Intermediate Silver Open',  group:'Group 4' },
+  { num:17, label:'17 — Full Silver Open',          group:'Group 5' },
+  { num:18, label:'18 — Intermediate Gold Open',    group:'Group 6' },
+  { num:19, label:'19 — Full Gold Open',            group:'Group 7' },
+  { num:20, label:'20 — Open',                      group:'Open' },
+  { num:21, label:'21 — Bronze Proficiency',        group:'Proficiency' },
+  { num:22, label:'22 — Silver Proficiency',        group:'Proficiency' },
+  { num:23, label:'23 — Gold Proficiency',          group:'Proficiency' },
+];
+
+function getStudioPeople(d) {
+  const people = new Set();
+  d.vip.filter(r=>r.name).forEach(r=>people.add(r.name));
+  d.tickets.filter(r=>r.name).forEach(r=>people.add(r.name));
+  return [...people].sort();
+}
+
+function isDuplicateDance(entries, idx, student, teacher, level, ageCat, dance) {
+  if (!student || !teacher || !level || !ageCat || !dance) return false;
+  return entries.some((e, i) =>
+    i !== idx &&
+    e.student && e.student.trim().toLowerCase() === student.trim().toLowerCase() &&
+    e.teacher && e.teacher.trim().toLowerCase() === teacher.trim().toLowerCase() &&
+    String(e.level) === String(level) &&
+    e.ageCat === ageCat &&
+    e.dances && e.dances.includes(dance)
+  );
+}
+
+function isEntryComplete(e) {
+  return e.student && e.teacher && e.style && e.level && e.ageCat && e.dances && e.dances.length > 0;
+}
+
+function renderDanceEntries(d) {
+  const el = document.getElementById('danceEntriesList');
+  if (!el) return;
+  if (!d.danceEntries) d.danceEntries = [];
+
+  const people = getStudioPeople(d);
+
+  if (!d.danceEntries.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:0.75rem;padding:0.5rem 0">No entries yet. Click + Add Entry to start.</p>';
+    document.getElementById('danceEntryCount').textContent = '0';
+    return;
+  }
+
+  el.innerHTML = d.danceEntries.map((e, idx) => {
+    const style = DANCE_STYLES[e.style] || { dances:[] };
+    const dances = e.dances || [];
+    const complete = isEntryComplete(e);
+    const expanded = !complete || (d._expandedEntry === idx);
+
+    // Check duplicates
+    const dupDances = style.dances.filter(d2 =>
+      dances.includes(d2) && isDuplicateDance(d.danceEntries, idx, e.student, e.teacher, e.level, e.ageCat, d2)
+    );
+    const hasDup = dupDances.length > 0;
+
+    // ── COLLAPSED VIEW (complete entries) ──
+    if (complete && !expanded) {
+      const levelLabel = LEVELS.find(l=>String(l.num)===String(e.level))?.label || e.level;
+      return `<div class="de-row${hasDup?' duplicate':''}" style="cursor:pointer" onclick="expandEntry(${idx})">
+        <div style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0.75rem;flex-wrap:wrap">
+          <span style="font-weight:700;font-size:0.75rem;color:var(--text)">${e.student}</span>
+          <span style="font-size:0.65rem;color:var(--muted)">with ${e.teacher}</span>
+          <span style="font-size:0.62rem;background:#f5f0e8;padding:1px 6px;border-radius:3px;color:var(--muted)">${e.style}</span>
+          <span style="font-size:0.62rem;color:var(--muted)">Lv${e.level} · ${e.ageCat}</span>
+          <div style="display:flex;gap:3px;margin-left:4px">
+            ${dances.map(d2=>`<span style="font-size:0.62rem;background:${hasDup&&dupDances.includes(d2)?'#fee':'var(--gold)'};color:${hasDup&&dupDances.includes(d2)?'#c0392b':'#fff'};padding:1px 5px;border-radius:3px;font-weight:700">${d2}</span>`).join('')}
+          </div>
+          ${hasDup?'<span style="color:var(--red);font-size:0.65rem">⚠ dup</span>':''}
+          <span style="margin-left:auto;font-size:0.65rem;color:var(--muted)">✏️ edit</span>
+          <button onclick="event.stopPropagation();removeDanceEntry(${idx})" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:0.8rem">✕</button>
+        </div>
+      </div>`;
+    }
+
+    // ── EXPANDED VIEW ──
+    const danceButtons = style.dances.map(dance => {
+      const isSelected = dances.includes(dance);
+      const isBlocked = !isSelected && isDuplicateDance(d.danceEntries, idx, e.student, e.teacher, e.level, e.ageCat, dance);
+      const isDupSel  = isSelected && dupDances.includes(dance);
+      const cls = isDupSel ? 'blocked' : isSelected ? 'selected' : isBlocked ? 'blocked' : '';
+      return `<button class="de-dance-btn ${cls}" title="${isBlocked?'Duplicate — already entered':''}"
+        onclick="toggleDanceDance(${idx},'${dance}')">${dance}</button>`;
+    }).join('');
+
+    const peopleOpts = people.map(p => `<option ${e.student===p?'selected':''}>${p}</option>`).join('');
+    const styleOpts  = Object.keys(DANCE_STYLES).map(s => `<option ${e.style===s?'selected':''}>${s}</option>`).join('');
+    const levelOpts  = LEVELS.map(l => `<option value="${l.num}" ${String(e.level)===String(l.num)?'selected':''}>${l.label}</option>`).join('');
+    const ageOpts    = AGE_CATS.map(a => `<option ${e.ageCat===a?'selected':''}>${a}</option>`).join('');
+
+    return `<div class="de-row${hasDup?' duplicate':''}">
+      <div class="de-row-header">
+        <select style="min-width:160px" onchange="updateDanceEntry(${idx},'student',this.value)">
+          <option value="">— Student —</option>
+          ${peopleOpts}
+        </select>
+        <span style="color:var(--muted);font-size:0.7rem">with</span>
+        <input type="text" value="${e.teacher||''}" placeholder="Teacher name"
+          style="min-width:150px" onchange="updateDanceEntry(${idx},'teacher',this.value)"/>
+        <select onchange="updateDanceEntry(${idx},'style',this.value)">
+          <option value="">— Style —</option>
+          ${styleOpts}
+        </select>
+        <select onchange="updateDanceEntry(${idx},'level',this.value)">
+          <option value="">— Level —</option>
+          ${levelOpts}
+        </select>
+        <select onchange="updateDanceEntry(${idx},'ageCat',this.value)">
+          <option value="">— Age —</option>
+          ${ageOpts}
+        </select>
+        ${complete ? `<button onclick="collapseEntry(${idx})" style="font-size:0.65rem;background:var(--gold);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;margin-left:auto">Done ✓</button>` : ''}
+        <button onclick="removeDanceEntry(${idx})" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:0.9rem${complete?'':';margin-left:auto'}">✕</button>
+      </div>
+      <div class="de-dances">
+        <span style="font-size:0.62rem;color:var(--muted);margin-right:4px">Dances:</span>
+        ${e.style ? danceButtons : '<span style="font-size:0.65rem;color:var(--muted)">Select style first</span>'}
+        ${dances.length ? `<span style="font-size:0.62rem;color:var(--muted);margin-left:8px">${dances.length} dance${dances.length!==1?'s':''}</span>` : ''}
+      </div>
+      ${hasDup ? `<div class="de-dup-msg">⚠ Duplicate: ${dupDances.join(', ')} already entered for same student/teacher/level/age</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const totalDances = d.danceEntries.reduce((s,e) => s + (e.dances||[]).length, 0);
+  document.getElementById('danceEntryCount').textContent =
+    `${d.danceEntries.length} entries · ${totalDances} dances`;
+}
+
+function expandEntry(idx) {
+  const d = getStudioData(currentStudio, currentComp);
+  d._expandedEntry = idx;
+  renderDanceEntries(d);
+}
+
+function collapseEntry(idx) {
+  const d = getStudioData(currentStudio, currentComp);
+  d._expandedEntry = null;
+  renderDanceEntries(d);
+}
+
+function addDanceEntry() {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.danceEntries) d.danceEntries = [];
+  d.danceEntries.push({ student:'', teacher:'', style:'', level:'', ageCat:'', dances:[] });
+  d._expandedEntry = d.danceEntries.length - 1; // auto-expand new row
+  renderDanceEntries(d);
+  triggerAutoSave();
+}
+
+function updateDanceEntry(idx, field, val) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.danceEntries[idx]) return;
+  d.danceEntries[idx][field] = val;
+  if (field === 'style') d.danceEntries[idx].dances = [];
+  d._expandedEntry = idx; // keep expanded while editing
+  renderDanceEntries(d);
+  triggerAutoSave();
+}
+
+function toggleDanceDance(idx, dance) {
+  const d = getStudioData(currentStudio, currentComp);
+  const entry = d.danceEntries[idx];
+  if (!entry) return;
+  if (!entry.dances) entry.dances = [];
+
+  const alreadySelected = entry.dances.includes(dance);
+  if (alreadySelected) {
+    entry.dances = entry.dances.filter(d2 => d2 !== dance);
+  } else {
+    // Check for duplicate before adding
+    if (isDuplicateDance(d.danceEntries, idx, entry.student, entry.teacher, entry.level, entry.ageCat, dance)) {
+      showModal('⚠️', 'Duplicate Entry',
+        `<strong>${entry.student}</strong> is already entered in <strong>${dance}</strong> at Level ${entry.level} (${entry.ageCat}) with ${entry.teacher}.<br><br>Duplicates are not allowed.`);
+      return;
+    }
+    entry.dances.push(dance);
+  }
+  renderDanceEntries(d);
+  triggerAutoSave();
+}
+
+function removeDanceEntry(idx) {
+  const d = getStudioData(currentStudio, currentComp);
+  d.danceEntries.splice(idx, 1);
+  renderDanceEntries(d);
+  triggerAutoSave();
+}
+
 // ═══════════════════════════════════════════════════════
 // INIT — wait for Firebase before loading
 // ═══════════════════════════════════════════════════════
@@ -6575,8 +6914,8 @@ initApp();
 </script>
 
 <!-- ── MODAL POPUPS ── -->
-<div id="modalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9000;align-items:center;justify-content:center" onclick="closeModal(event)">
-  <div id="modalBox" style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:2rem 2.5rem;max-width:420px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.4);position:relative" onclick="event.stopPropagation()">
+<div id="modalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9000;align-items:center;justify-content:center" onclick="closeModal(event)">
+  <div id="modalBox" style="background:#fff;border:1px solid #ddd;border-radius:12px;padding:2rem 2.5rem;max-width:440px;width:90%;text-align:center;box-shadow:0 12px 48px rgba(0,0,0,0.5);position:relative" onclick="event.stopPropagation()">
     <div id="modalIcon" style="font-size:2.2rem;margin-bottom:0.75rem"></div>
     <div id="modalTitle" style="font-family:'Cormorant Garamond',Georgia,serif;font-size:1.5rem;font-weight:700;color:var(--gold);margin-bottom:0.5rem"></div>
     <div id="modalBody" style="font-size:0.82rem;color:var(--text);line-height:1.7;margin-bottom:1.5rem"></div>
