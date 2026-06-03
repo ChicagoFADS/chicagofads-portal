@@ -452,6 +452,38 @@
   .p-remove:hover { color:var(--red); }
   .price-tag { color:var(--muted); font-size:0.58rem; }
 
+  /* ── DANCE ENTRIES ── */
+  .de-row {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    background: #fff;
+    overflow: hidden;
+  }
+  .de-row.duplicate { border-color: var(--red); background: #fff8f8; }
+  .de-row-header {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.75rem; background: #faf8f3;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .de-row-header select, .de-row-header input {
+    font-size: 0.72rem; border: 1px solid var(--border);
+    border-radius: 4px; padding: 3px 6px; background: #fff;
+    color: #1a1a1a; cursor: pointer;
+  }
+  .de-dances {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    padding: 0.5rem 0.75rem; align-items: center;
+  }
+  .de-dance-btn {
+    font-size: 0.65rem; padding: 2px 8px; border-radius: 3px;
+    border: 1px solid var(--border); background: #fff;
+    cursor: pointer; color: #555; transition: all 0.1s;
+  }
+  .de-dance-btn.selected { background: var(--gold); color: #fff; border-color: var(--gold); font-weight: 700; }
+  .de-dance-btn.blocked { background: #fee; color: #c0392b; border-color: #c0392b; cursor: not-allowed; text-decoration: line-through; }
+  .de-dup-msg { font-size: 0.62rem; color: var(--red); padding: 0 0.75rem 0.4rem; }
+
   /* ── STAT CARDS ── */
   .stats-grid {
     display: grid;
@@ -750,7 +782,8 @@
     <div class="tabs">
       <button class="tab active" onclick="switchTab('vip')">VIP Reservations</button>
       <button class="tab" onclick="switchTab('tickets')">People</button>
-      <button class="tab" onclick="switchTab('compentries')">Entries</button>
+      <button class="tab" onclick="switchTab('danceentries')">💃 Dance Entries</button>
+      <button class="tab" onclick="switchTab('compentries')">Entries $</button>
       <button class="tab" onclick="switchTab('documents')">Documents</button>
       <button class="tab" onclick="switchTab('summary')">Summary</button>
     </div>
@@ -812,6 +845,38 @@
               Tickets: <strong id="peopleTotalTickets">$0.00</strong> &nbsp;·&nbsp;
               Meals: <strong id="peopleTotalMeals">$0.00</strong> &nbsp;·&nbsp;
               Combined: <strong id="peopleTotalCombined" style="color:var(--gold)">$0.00</strong>
+            </div>
+          </div>
+          <div id="peopleMeatTotals" style="margin-top:0.6rem;padding:0.5rem 0.75rem;background:#faf8f3;border:1px solid var(--border);border-radius:6px;display:flex;gap:1rem;flex-wrap:wrap;align-items:center">
+            <span style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Sat Banquet</span>
+            <span style="font-size:0.7rem">🍖 Beef: <strong id="meatBeef">0</strong></span>
+            <span style="font-size:0.7rem">🐟 Fish: <strong id="meatFish">0</strong></span>
+            <span style="font-size:0.7rem">🍗 Chicken: <strong id="meatChicken">0</strong></span>
+            <span style="font-size:0.7rem">🥦 Veg: <strong id="meatVeg">0</strong></span>
+            <span style="font-size:0.7rem">👶 Kids: <strong id="meatKids">0</strong></span>
+            <span style="margin-left:auto;font-size:0.72rem;color:var(--gold);font-weight:700">Total: <strong id="meatTotal">0</strong> dinner guests</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DANCE ENTRIES TAB -->
+    <div class="tab-content" id="tab-danceentries">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">💃 Dance Entry Submissions</div>
+          <div style="display:flex;gap:0.5rem">
+            <button class="btn btn-sm btn-success" onclick="saveAll()">Save Data</button>
+            <button class="btn btn-sm btn-outline" onclick="addDanceEntry()">+ Add Entry</button>
+          </div>
+        </div>
+        <div class="section-body">
+          <p style="font-size:0.65rem;color:var(--muted);margin-bottom:0.75rem">Enter each dance individually. Duplicates (same student + teacher + level + dance) are automatically blocked.</p>
+          <div id="danceEntriesList"></div>
+          <div style="margin-top:0.75rem;display:flex;justify-content:space-between;align-items:center">
+            <button class="add-row-btn" style="margin:0" onclick="addDanceEntry()">+ Add Entry</button>
+            <div style="font-size:0.7rem;color:var(--muted)">
+              Total entries: <strong id="danceEntryCount" style="color:var(--gold)">0</strong>
             </div>
           </div>
         </div>
@@ -980,7 +1045,13 @@
     </div>
 
     <div class="tab-content" id="org-tab-setup">
+      <div style="display:flex;gap:0.5rem;margin-bottom:1rem">
+        <button class="btn btn-sm" id="setupViewDiagram" style="width:auto;background:var(--gold);color:var(--black)" onclick="setSeatingView('diagram')">🗺️ Diagram View</button>
+        <button class="btn btn-sm btn-outline" id="setupViewWeekend" style="width:auto" onclick="setSeatingView('weekend')">📋 Weekend Seating List</button>
+        <button class="btn btn-sm btn-outline" id="setupViewBanquet" style="width:auto" onclick="setSeatingView('banquet')">🍽️ Banquet Seating List</button>
+      </div>
       <div id="setupContent"></div>
+      <div id="seatingListContent" style="display:none"></div>
     </div>
 
     <div class="tab-content" id="org-tab-admin">
@@ -1085,6 +1156,8 @@ async function loadState() {
     if (!appState.credentials[s]) appState.credentials[s] = s.toLowerCase().replace(/\s/g,'').replace(/\./g,'') + '1234';
   });
   if (!appState.visitingStudios) appState.visitingStudios = [];
+  // Remove any core studios that accidentally got added to visitingStudios
+  appState.visitingStudios = appState.visitingStudios.filter(v => !appState.studios.includes(v.name));
   if (!appState.data) appState.data = {};
 
   // Load each studio's data separately from Firebase — always get freshest copy
@@ -1162,10 +1235,11 @@ function getStudioData(studio, comp) {
   // Migrate old field names
   if (d.entries && !d.tickets) { d.tickets = d.entries; delete d.entries; }
   // Always ensure all arrays exist
-  if (!d.vip)         d.vip         = [];
-  if (!d.tickets)     d.tickets     = [];
-  if (!d.meals)       d.meals       = [];
-  if (!d.compEntries) d.compEntries = [];
+  if (!d.vip)          d.vip         = [];
+  if (!d.tickets)      d.tickets     = [];
+  if (!d.meals)        d.meals       = [];
+  if (!d.compEntries)  d.compEntries = [];
+  if (!d.danceEntries) d.danceEntries = [];
   return d;
 }
 
@@ -1255,6 +1329,10 @@ function switchTab(name) {
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'summary')    renderStudioSummary();
   if (name === 'documents')  renderStudioDocs();
+  if (name === 'danceentries') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderDanceEntries(d);
+  }
   if (name === 'tickets') {
     const d = getStudioData(currentStudio, currentComp);
     renderPeopleList(d);
@@ -1372,11 +1450,27 @@ function returnToOrganizerDashboard() {
 function loadStudioData() {
   currentComp = document.getElementById('studioCompSelect').value;
   const d = getStudioData(currentStudio, currentComp);
+
+  // Migrate meals-only people into tickets[] (from old loaders)
+  let migrated = false;
+  d.meals.forEach(m => {
+    if (!m.name) return;
+    const hasTicket = d.tickets.find(t => t.name && t.name.trim().toLowerCase() === m.name.trim().toLowerCase());
+    if (!hasTicket) {
+      d.tickets.push({
+        name:m.name, proam:m.proam||'', vipAlc:'ALC',
+        firstTimer:false, compFee:false, thuMat:false, thuEve:false,
+        friMat:false, friEve:false, satMat:false, gift:false
+      });
+      migrated = true;
+    }
+  });
+  if (migrated) triggerAutoSave(); // save migrated structure back to Firebase
+
   renderVipTable(d.vip);
   renderPeopleList(d);
   renderCompEntriesTable(d.compEntries);
   initEntryMode();
-  // Show balance popup only for actual studio logins (not organizer managing)
   if (currentUser && currentUser.type === 'studio') {
     setTimeout(() => showBalancePopupIfOwed(currentStudio, currentComp), 800);
   }
@@ -1400,8 +1494,8 @@ function makeVipRow(i, r = {}) {
     <td><input type="text" value="${r.name||''}" placeholder="Full name" style="min-width:180px" onchange="updateRow('vip',${i},'name',this.value)"/></td>
     <td><select onchange="updateRow('vip',${i},'proam',this.value)">
       <option value="">—</option>
-      <option ${r.proam==='Amateur'?'selected':''}>Amateur</option>
-      <option ${r.proam==='Professional'?'selected':''}>Professional</option>
+      <option value="Amateur" ${r.proam==='Amateur'?'selected':''}>Am</option>
+      <option value="Professional" ${r.proam==='Professional'?'selected':''}>Pro</option>
     </select></td>
     <td><select onchange="updateRow('vip',${i},'firstTimer',this.value)">
       <option value="">—</option>
@@ -1454,11 +1548,38 @@ function renderPeopleList(d) {
   const el = document.getElementById('peopleList');
   if (!el) return;
 
-  // Sync meals array
-  d.tickets.forEach((t, i) => {
-    if (!d.meals[i]) d.meals[i] = { name:t.name, proam:t.proam||'', thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false };
-    else if (!d.meals[i].name) d.meals[i].name = t.name;
+  // ── SYNC: ensure tickets and meals are aligned ──
+  // First, migrate any meals-only people (from old loaders) into tickets[]
+  d.meals.forEach((m, i) => {
+    if (!m.name) return;
+    const hasTicket = d.tickets.find(t => t.name && t.name.trim().toLowerCase() === m.name.trim().toLowerCase());
+    if (!hasTicket) {
+      // Create a ticket entry for this meals-only person
+      d.tickets.push({
+        name: m.name, proam: m.proam||'', vipAlc:'ALC',
+        firstTimer:false, compFee:false, thuMat:false, thuEve:false,
+        friMat:false, friEve:false, satMat:false, gift:false
+      });
+    }
   });
+
+  // Then sync meals[] to match tickets[] order and length
+  d.tickets.forEach((t, i) => {
+    if (!d.meals[i]) {
+      // Try to find existing meal entry by name
+      const existing = d.meals.find(m => m.name && t.name && m.name.trim().toLowerCase() === t.name.trim().toLowerCase());
+      if (existing) {
+        d.meals[i] = existing;
+      } else {
+        d.meals[i] = { name:t.name, proam:t.proam||'', thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false };
+      }
+    } else if (!d.meals[i].name) {
+      d.meals[i].name = t.name;
+    }
+  });
+
+  // Trim meals[] to same length as tickets[]
+  d.meals.length = d.tickets.length;
 
   if (!d.tickets.length) {
     el.innerHTML = '<p style="color:var(--muted);font-size:0.75rem;padding:0.5rem 0">No people added yet. Click + Add Person to start.</p>';
@@ -1530,8 +1651,8 @@ function renderPeopleList(d) {
       <td>
         <select onchange="updatePersonTicket(${i},'proam',this.value)">
           <option value="">—</option>
-          <option ${t.proam==='Amateur'?'selected':''}>Amateur</option>
-          <option ${t.proam==='Professional'?'selected':''}>Professional</option>
+          <option value="Amateur" ${t.proam==='Amateur'?'selected':''}>Am</option>
+          <option value="Professional" ${t.proam==='Professional'?'selected':''}>Pro</option>
         </select>
       </td>
       <td>
@@ -1643,13 +1764,40 @@ function refreshPersonCard(i, d) {
 
 function updatePeopleTotals(d) {
   const ticketTotal = (d.tickets||[]).reduce((s,r)=>s+calcTicketFee(r),0);
-  const mealTotal   = (d.meals||[]).reduce((s,r)=>s+calcMealFee(r),0);
+  const mealTotal   = calcAlcMealRevenue(d);
+  const vipCount    = (d.vip||[]).filter(r=>r.name).length;
   const el1 = document.getElementById('peopleTotalTickets');
   const el2 = document.getElementById('peopleTotalMeals');
   const el3 = document.getElementById('peopleTotalCombined');
   if (el1) el1.textContent = '$'+ticketTotal.toFixed(2);
   if (el2) el2.textContent = '$'+mealTotal.toFixed(2);
   if (el3) el3.textContent = '$'+(ticketTotal+mealTotal).toFixed(2);
+
+  // Meat totals — VIPs use r.meal, ALC use r.satMealChoice
+  const meats = { Beef:0, Fish:0, Chicken:0, Vegetarian:0, Kids:0 };
+  (d.vip||[]).filter(r=>r.name).forEach(r => {
+    if (r.meal && meats[r.meal] !== undefined) meats[r.meal]++;
+  });
+  (d.meals||[]).forEach(r => {
+    const ticket = (d.tickets||[]).find(t => t.name === r.name);
+    const isVIP = ticket && ticket.vipAlc === 'VIP';
+    if (!isVIP && r.satCocktail) {
+      if (r.childrenMeal) meats.Kids++;
+      else if (r.satMealChoice && meats[r.satMealChoice] !== undefined) meats[r.satMealChoice]++;
+    }
+  });
+  const total = vipCount + (d.meals||[]).filter(r => {
+    const t = (d.tickets||[]).find(t=>t.name===r.name);
+    return !(t&&t.vipAlc==='VIP') && r.satCocktail;
+  }).length;
+
+  const setEl = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
+  setEl('meatBeef', meats.Beef);
+  setEl('meatFish', meats.Fish);
+  setEl('meatChicken', meats.Chicken);
+  setEl('meatVeg', meats.Vegetarian);
+  setEl('meatKids', meats.Kids);
+  setEl('meatTotal', total);
 }
 
 function addPersonRow() {
@@ -1693,8 +1841,8 @@ function makeTicketRow(i, r = {}) {
     <td><input type="text" value="${r.name||''}" placeholder="Full name" onchange="updateRow('tickets',${i},'name',this.value)"/></td>
     <td><select onchange="updateRow('tickets',${i},'proam',this.value)">
       <option value="">—</option>
-      <option ${r.proam==='Amateur'?'selected':''}>Amateur</option>
-      <option ${r.proam==='Professional'?'selected':''}>Professional</option>
+      <option value="Amateur" ${r.proam==='Amateur'?'selected':''}>Am</option>
+      <option value="Professional" ${r.proam==='Professional'?'selected':''}>Pro</option>
     </select></td>
     <td><input type="checkbox" ${chk(r.firstTimer)} onchange="updateRow('tickets',${i},'firstTimer',this.checked)"/></td>
     <td><input type="checkbox" ${chk(r.compFee)} onchange="updateRow('tickets',${i},'compFee',this.checked);refreshTicketRow(${i})"/></td>
@@ -1833,6 +1981,16 @@ function calcMealFee(r) {
   return total;
 }
 
+// Only sum meal fees for ALC people (VIP meals included in $695 package)
+function calcAlcMealRevenue(d) {
+  return (d.meals||[]).reduce((sum, r) => {
+    const ticket = (d.tickets||[]).find(t => t.name === r.name);
+    if (ticket && ticket.vipAlc === 'VIP') return sum; // VIP meals in package
+    return sum + calcMealFee(r);
+  }, 0);
+}
+
+
 function renderMealsTable(rows) {
   const tbody = document.getElementById('mealsBody');
   tbody.innerHTML = '';
@@ -1850,8 +2008,8 @@ function makeMealRow(i, r = {}) {
     <td><input type="text" value="${r.name||''}" placeholder="Full name" onchange="updateRow('meals',${i},'name',this.value)"/></td>
     <td><select onchange="updateRow('meals',${i},'proam',this.value)">
       <option value="">—</option>
-      <option ${r.proam==='Amateur'?'selected':''}>Amateur</option>
-      <option ${r.proam==='Professional'?'selected':''}>Professional</option>
+      <option value="Amateur" ${r.proam==='Amateur'?'selected':''}>Am</option>
+      <option value="Professional" ${r.proam==='Professional'?'selected':''}>Pro</option>
     </select></td>
     <td><input type="checkbox" ${chk(r.thuDinner)} onchange="updateRow('meals',${i},'thuDinner',this.checked);refreshMealRow(${i})"/></td>
     <td><input type="checkbox" ${chk(r.friBrk)} onchange="updateRow('meals',${i},'friBrk',this.checked);refreshMealRow(${i})"/></td>
@@ -1910,7 +2068,7 @@ function refreshMealRow(i) {
 
 function updateMealsTotal() {
   const d = getStudioData(currentStudio, currentComp);
-  const total = d.meals.reduce((s, r) => s + calcMealFee(r), 0);
+  const total = calcAlcMealRevenue(d);
   document.getElementById('mealsTotalVal').textContent = '$' + total.toFixed(2);
 }
 
@@ -1936,8 +2094,7 @@ function removeRow(section, index) {
   const d = getStudioData(currentStudio, currentComp);
   d[section].splice(index, 1);
   if (section === 'vip') renderVipTable(d.vip);
-  if (section === 'tickets') renderTicketsTable(d.tickets);
-  if (section === 'meals') renderMealsTable(d.meals);
+  if (section === 'tickets' || section === 'meals') renderPeopleList(d);
   triggerAutoSave();
 }
 
@@ -1998,7 +2155,7 @@ async function showBalancePopupIfOwed(studio, comp) {
     const vipRev    = d.vip.filter(r=>r.name).length * 695;
     const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
     const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-    const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+    const mealRev   = calcAlcMealRevenue(d);
     const totalOwed = vipRev + ticketRev + entryRev + mealRev;
     if (totalOwed <= 0) return;
     const payments = await loadPayments(studio, comp);
@@ -2138,7 +2295,7 @@ function renderStudioSummary() {
 
   // ALC meal counts
   const alcMealCount = d.meals.filter(r => r.name).length;
-  const mealRev    = d.meals.reduce((s, r) => s + calcMealFee(r), 0);
+  const mealRev    = calcAlcMealRevenue(d);
 
   // Total headcount — VIPs + ALC (use max of ticket/meal ALC count since same person may appear in both)
   const alcPeople  = Math.max(alcCount, alcMealCount);
@@ -2297,7 +2454,7 @@ function getCompData(comp) {
     const vipRev = vipCount * 695;
     const ticketRev = d.tickets.reduce((sum,r)=>sum+calcTicketFee(r),0);
     const entryRev = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-    const mealRev = d.meals.reduce((sum,r)=>sum+calcMealFee(r),0);
+    const mealRev = calcAlcMealRevenue(d);
     const ticketHolders = d.tickets.filter(r=>r.name).length;
     const mealPkgs = d.meals.filter(r=>r.name).length;
     // VIPs get welcome gift + all meals automatically
@@ -2535,8 +2692,14 @@ function renderStudiosTab() {
     </div>
     <div class="studio-grid fade-up">
     ${data.map(d=>`
-    <div class="studio-card">
-      <div class="studio-card-name">${d.studio}</div>
+    <div class="studio-card" style="cursor:pointer;${isStudioComplete(d.studio,comp)?'border:2px solid #27ae60;background:#f0fff4;':''}" onclick="quickOpenStudio('${d.studio}')" title="Click to edit ${d.studio}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+        <div class="studio-card-name" style="margin-bottom:0">${d.studio}</div>
+        <label onclick="toggleStudioComplete('${d.studio}','${comp}',event)" title="${isStudioComplete(d.studio,comp)?'Mark incomplete':'Mark complete'}" style="display:flex;align-items:center;gap:4px;font-size:0.65rem;cursor:pointer;color:${isStudioComplete(d.studio,comp)?'#27ae60':'var(--muted)'}">
+          <input type="checkbox" ${isStudioComplete(d.studio,comp)?'checked':''} style="accent-color:#27ae60;width:14px;height:14px" onclick="event.stopPropagation()"/>
+          Done
+        </label>
+      </div>
       <div class="studio-stat-row"><span>VIPs</span><span class="val">${d.vipCount} &nbsp;·&nbsp; $${d.vipRev.toLocaleString()}</span></div>
       <div class="studio-stat-row"><span>Ticket Holders</span><span class="val">${d.ticketHolders} &nbsp;·&nbsp; $${Math.round(d.ticketRev).toLocaleString()}</span></div>
       <div class="studio-stat-row"><span>Welcome Gifts</span><span class="val" style="color:var(--gold-light)">${d.welcomeGifts}</span></div>
@@ -2600,7 +2763,7 @@ function renderMealsTab() {
     const kids = d.meals.filter(r=>r.childrenMeal).length;
     totalKids += kids;
     row['Kids'] = kids;
-    Object.keys(sessionTotals).forEach(k => sessionTotals[k] += d.tickets.filter(r=>r[k]).length);
+    Object.keys(sessionTotals).forEach(k => { sessionTotals[k] += d.tickets.filter(r=>r[k]).length + d.vip.filter(r=>r.name).length; });
     // dinner choices — ALC meals
     d.meals.filter(r=>{const t=d.tickets.find(t=>t.name===r.name);return !(t&&t.vipAlc==='VIP')&&r.satCocktail;}).forEach(r => {
       const ch = r.childrenMeal ? 'Kids Meal' : (r.satMealChoice||'');
@@ -2688,7 +2851,7 @@ function renderCompareTab() {
       const vipR  = d.vip.filter(r=>r.name).length * 695;
       const tickR = d.tickets.reduce((sum,r)=>sum+calcTicketFee(r),0);
       const entR  = calcCompEntriesTotal(d.compEntries, c, d.entryOverride);
-      const mealR = d.meals.reduce((sum,r)=>sum+calcMealFee(r),0);
+      const mealR = calcAlcMealRevenue(d);
       return vipR+tickR+entR+mealR;
     });
     return { studio:s, totals };
@@ -3214,7 +3377,7 @@ async function renderVisitingTab() {
       const ticketCount = d.tickets.filter(r=>r.name).length;
       const mealCount = d.meals.filter(r=>r.name).length;
       const total = vipCount*695 + d.tickets.reduce((s,r)=>s+calcTicketFee(r),0) +
-                    calcCompEntriesTotal(d.compEntries, comp, d.entryOverride) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+                    calcCompEntriesTotal(d.compEntries, comp, d.entryOverride) + calcAlcMealRevenue(d);
       const payments = await loadPayments(name, comp);
       const totalPaid = payments.reduce((s,p)=>s+p.amount,0);
       const balance = total - totalPaid;
@@ -3276,7 +3439,7 @@ async function renderVisitingTab() {
     for (const name of visiting) {
       const d = getStudioData(name, comp);
       const t = d.vip.filter(r=>r.name).length*695 + d.tickets.reduce((s,r)=>s+calcTicketFee(r),0) +
-                calcCompEntriesTotal(d.compEntries, comp, d.entryOverride) + d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+                calcCompEntriesTotal(d.compEntries, comp, d.entryOverride) + calcAlcMealRevenue(d);
       const pmts = await loadPayments(name, comp);
       const paid = pmts.reduce((s,p)=>s+p.amount,0);
       vtotalOwed += t; vtotalPaid += paid;
@@ -3346,10 +3509,9 @@ function renderVisitingDataEntry(comp) {
     </div>
 
     <div class="tabs" id="visitingDataTabs">
-      <button class="tab active" onclick="switchVisitingTab('vvip')">VIP</button>
-      <button class="tab" onclick="switchVisitingTab('vtickets')">Tickets</button>
+      <button class="tab active" onclick="switchVisitingTab('vvip')">VIP Reservations</button>
+      <button class="tab" onclick="switchVisitingTab('vpeople')">People</button>
       <button class="tab" onclick="switchVisitingTab('vcompentries')">Entries</button>
-      <button class="tab" onclick="switchVisitingTab('vmeals')">Meals</button>
     </div>
 
     <div class="tab-content active" id="tab-vvip">
@@ -3366,27 +3528,30 @@ function renderVisitingDataEntry(comp) {
         </div>
       </div>
     </div>
-    <div class="tab-content" id="tab-vtickets">
+
+    <div class="tab-content" id="tab-vpeople">
       <div class="section-card">
-        <div class="section-header"><div class="section-title">Session Tickets &amp; Welcome Gift</div>
-          <button class="btn btn-sm btn-outline" onclick="addTicketRow()">+ Add Row</button></div>
-        <div class="section-body" style="overflow-x:auto">
-          <table class="data-table"><thead><tr>
-            <th>#</th><th>Name</th><th>Pro/Am</th><th>Newcomer?</th>
-            <th>Thu Mat<br><span style="color:var(--muted);font-size:0.55rem">$15</span></th>
-            <th>Thu Eve<br><span style="color:var(--muted);font-size:0.55rem">$20</span></th>
-            <th>Fri Mat<br><span style="color:var(--muted);font-size:0.55rem">$15</span></th>
-            <th>Fri Eve<br><span style="color:var(--muted);font-size:0.55rem">$25</span></th>
-            <th>Sat Mat<br><span style="color:var(--muted);font-size:0.55rem">$15</span></th>
-            <th>Welcome Gift<br><span style="color:var(--muted);font-size:0.55rem">$48</span></th>
-            <th>VIP/ALC</th><th>Total</th><th></th>
-          </tr></thead><tbody id="ticketsBody"></tbody>
-          <tfoot><tr class="total-row"><td colspan="10" style="text-align:right;font-size:0.65rem;letter-spacing:0.1em">TOTAL TICKET FEES</td><td id="ticketsTotalVal" colspan="2">$0.00</td><td></td></tr></tfoot>
-          </table>
-          <button class="add-row-btn" onclick="addTicketRow()">+ Add Person</button>
+        <div class="section-header">
+          <div class="section-title">ALC People — Sessions &amp; Meals</div>
+          <div style="display:flex;gap:0.5rem">
+            <button class="btn btn-sm btn-success" onclick="saveAll()">Save Data</button>
+            <button class="btn btn-sm btn-outline" onclick="addPersonRow()">+ Add Person</button>
+          </div>
+        </div>
+        <div class="section-body">
+          <div id="peopleList"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+            <button class="add-row-btn" style="margin:0" onclick="addPersonRow()">+ Add Person</button>
+            <div style="font-size:0.7rem;color:var(--muted)">
+              Tickets: <strong id="peopleTotalTickets">$0.00</strong> &nbsp;·&nbsp;
+              Meals: <strong id="peopleTotalMeals">$0.00</strong> &nbsp;·&nbsp;
+              Combined: <strong id="peopleTotalCombined" style="color:var(--gold)">$0.00</strong>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+
     <div class="tab-content" id="tab-vcompentries">
       <div class="section-card">
         <div class="section-header"><div class="section-title">Competition Entry Fees — by Division</div></div>
@@ -3400,43 +3565,34 @@ function renderVisitingDataEntry(comp) {
         </div>
       </div>
     </div>
-    <div class="tab-content" id="tab-vmeals">
-      <div class="section-card">
-        <div class="section-header"><div class="section-title">Meal Packages</div>
-          <button class="btn btn-sm btn-outline" onclick="addMealRow()">+ Add Row</button></div>
-        <div class="section-body" style="overflow-x:auto">
-          <table class="data-table"><thead><tr>
-            <th>#</th><th>Name</th><th>Pro/Am</th>
-            <th>Thu Din<br><span style="color:var(--muted);font-size:0.55rem">$82</span></th>
-            <th>Fri Brk<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-            <th>Fri Lun<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-            <th>Fri Din<br><span style="color:var(--muted);font-size:0.55rem">$82</span></th>
-            <th>Sat Brk<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-            <th>Sat Lun<br><span style="color:var(--muted);font-size:0.55rem">$52</span></th>
-            <th>Sat Banquet<br><span style="color:var(--muted);font-size:0.55rem">$140/$45</span></th>
-            <th>Choice</th><th>Kids?</th><th>Allergy</th><th>Total</th><th></th>
-          </tr></thead><tbody id="mealsBody"></tbody>
-          <tfoot><tr class="total-row"><td colspan="12" style="text-align:right;font-size:0.65rem;letter-spacing:0.1em">TOTAL MEAL REVENUE</td>
-            <td id="mealsTotalVal" colspan="2">$0.00</td></tr></tfoot>
-          </table>
-          <button class="add-row-btn" onclick="addMealRow()">+ Add Person</button>
-        </div>
-      </div>
-    </div>
   `;
 
   renderVipTable(d.vip);
-  renderTicketsTable(d.tickets);
+  renderPeopleList(d);
   renderCompEntriesTable(d.compEntries);
   initEntryMode();
-  renderMealsTable(d.meals);
 }
 
 function switchVisitingTab(name) {
   document.querySelectorAll('#visitingDataTabs .tab').forEach(t=>t.classList.remove('active'));
-  ['vvip','vtickets','vcompentries','vmeals'].forEach(n=>{ const el=document.getElementById('tab-'+n); if(el) el.classList.remove('active'); });
-  event.target.classList.add('active');
-  document.getElementById('tab-'+name).classList.add('active');
+  ['vvip','vpeople','vcompentries'].forEach(n=>{ const el=document.getElementById('tab-'+n); if(el) el.classList.remove('active'); });
+  const activeBtn = document.querySelector(`#visitingDataTabs .tab[onclick*="'${name}'"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+  const tab = document.getElementById('tab-'+name);
+  if (tab) tab.classList.add('active');
+  if (name === 'vpeople') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderPeopleList(d);
+  }
+  if (name === 'vvip') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderVipTable(d.vip);
+  }
+  if (name === 'vcompentries') {
+    const d = getStudioData(currentStudio, currentComp);
+    renderCompEntriesTable(d.compEntries);
+    initEntryMode();
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3462,24 +3618,24 @@ function generateRegistrationPDF(studio, comp) {
   const vipCount = d.vip.filter(r=>r.name).length;
 
   d.vip.filter(r=>r.name).forEach(r => {
-    allPeople.push({ name:r.name, proam:r.proam||'—', meals:'ALL', type:'VIP', gift:'✓', dinner:r.meal||'—', allergy:r.allergy||'' });
+    allPeople.push({ name:r.name, proam:r.proam||'—', meals:'ALL', type:'VIP', gift:'✓', dinner:r.meal||'—', allergy:r.allergy||'', firstTimer: r.firstTimer==='Yes' });
   });
 
   d.tickets.filter(r=>r.name).forEach(r => {
     const mealRow = d.meals.find(m=>m.name&&m.name.trim().toLowerCase()===r.name.trim().toLowerCase())||{};
-    allPeople.push({ name:r.name, proam:r.proam||'—', meals:mealShorthand(mealRow), type:r.vipAlc||'ALC', gift:r.gift?'✓':'', dinner:mealRow.childrenMeal?'Kids':(mealRow.satMealChoice||'—'), allergy:mealRow.allergy||'' });
+    allPeople.push({ name:r.name, proam:r.proam||'—', meals:mealShorthand(mealRow), type:r.vipAlc||'ALC', gift:r.gift?'✓':'', dinner:mealRow.childrenMeal?'Kids':(mealRow.satMealChoice||'—'), allergy:mealRow.allergy||'', firstTimer:!!r.firstTimer });
   });
 
   d.meals.filter(r=>r.name).forEach(r => {
     if (!allPeople.find(p=>p.name.trim().toLowerCase()===r.name.trim().toLowerCase())) {
-      allPeople.push({ name:r.name, proam:r.proam||'—', meals:mealShorthand(r), type:'ALC', gift:'', dinner:r.childrenMeal?'Kids':(r.satMealChoice||'—'), allergy:r.allergy||'' });
+      allPeople.push({ name:r.name, proam:r.proam||'—', meals:mealShorthand(r), type:'ALC', gift:'', dinner:r.childrenMeal?'Kids':(r.satMealChoice||'—'), allergy:r.allergy||'', firstTimer:false });
     }
   });
 
   const vipRev    = vipCount * 695;
   const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
   const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-  const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+  const mealRev   = calcAlcMealRevenue(d);
   const grandTotal = vipRev + ticketRev + entryRev + mealRev;
   const totalGifts = vipCount + d.tickets.filter(r=>r.gift).length;
 
@@ -3519,6 +3675,8 @@ function generateRegistrationPDF(studio, comp) {
     td { padding: 4px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
     tr:nth-child(even) td { background: #f9f9f9; }
     .vip-row td { background: #fffbe6 !important; font-weight: 600; }
+    .new-row td { background: #fff8f0 !important; }
+    .new-row td:first-child { border-left: 3px solid #e67e22; }
     .counts { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
     .count-box { border: 1px solid #ccc; padding: 3px 8px; text-align: center; min-width: 44px; }
     .count-box .lbl { font-size: 9px; text-transform: uppercase; color: #888; }
@@ -3535,8 +3693,8 @@ function generateRegistrationPDF(studio, comp) {
   <table>
     <thead><tr><th>Name</th><th>Pro/Am</th><th>Meals</th><th>Type</th><th>Gift</th><th>Dinner</th><th>Allergy</th></tr></thead>
     <tbody>
-    ${allPeople.map(p=>`<tr class="${p.type==='VIP'?'vip-row':''}">
-      <td><strong>${p.name}</strong></td><td>${p.proam}</td>
+    ${allPeople.map(p=>`<tr class="${p.type==='VIP'?'vip-row':''}${p.firstTimer?' new-row':''}">
+      <td><strong>${p.name}</strong>${p.firstTimer?' <span style="color:#e67e22;font-size:10px;font-weight:900">★ NEW</span>':''}</td><td>${p.proam}</td>
       <td style="font-family:monospace;font-size:11px">${p.meals}</td>
       <td>${p.type}</td><td style="text-align:center">${p.gift}</td>
       <td>${p.dinner}</td><td style="color:#c00;font-size:10px">${p.allergy}</td>
@@ -3583,165 +3741,426 @@ function generateRegistrationPDF(studio, comp) {
 
 const LOGO_DATA_URL = "data:image/png;base64,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";
 
-function printDinnerLabels(comp, studioFilter) {
-  // Avery 6521 — 1" x 2⅝" — 30 labels per sheet, 3 across x 10 down
-  const studios = studioFilter ? [studioFilter] : getAllStudiosForComp(comp);
 
+// ─── LABEL PREVIEW & PRINT ───
+
+function hasRegistrationLabel(d, ticket, studio) {
+  // Only print reg label if person has more than just Saturday dinner
+  // Must have: VIP, OR session ticket, OR comp fee, OR gift, OR 2+ meals
+  if (!ticket.name) return false;
+  const isVIP = ticket.vipAlc === 'VIP';
+  if (isVIP) return true;
+  const hasSessions = ticket.thuMat || ticket.thuEve || ticket.friMat || ticket.friEve || ticket.satMat;
+  if (hasSessions) return true;
+  if (ticket.compFee) return true;
+  if (ticket.gift) return true;
+  // Check meals — if more than just satCocktail, include them
+  const m = (d.meals || []).find(r => r.name && r.name.trim().toLowerCase() === ticket.name.trim().toLowerCase());
+  if (m) {
+    const mealCount = [m.thuDinner, m.friBrk, m.friLunch, m.friDinner, m.satBrk, m.satLunch, m.satCocktail].filter(Boolean).length;
+    if (mealCount >= 2) return true;
+    // Only satCocktail = dinner-only = no reg label
+  }
+  return false;
+}
+
+// Store deselected label IDs
+let _deselectedLabels = {};
+
+function buildDinnerLabelList(comp, studioFilter) {
+  const studios = studioFilter ? [studioFilter] : getAllStudiosForComp(comp);
   const labels = [];
   studios.forEach(studio => {
     const d = getStudioData(studio, comp);
-    // VIPs all get Saturday dinner
     d.vip.filter(r=>r.name).forEach(r => {
-      labels.push({ name: r.name, studio, meal: r.meal||'', type:'VIP' });
+      labels.push({ id:`${studio}::vip::${r.name}`, name:r.name, studio, meal:r.meal||'', type:'VIP' });
     });
-    // ALC with Saturday Banquet selected
-    d.meals.filter(r=>r.name && r.satCocktail).forEach(r => {
-      labels.push({ name: r.name, studio, meal: r.childrenMeal?'Kids Meal':(r.satMealChoice||''), type:'ALC' });
+    d.meals.filter(r=>r.name && r.satCocktail && !d.vip.find(v=>v.name&&v.name.trim().toLowerCase()===r.name.trim().toLowerCase())).forEach(r => {
+      labels.push({ id:`${studio}::alc::${r.name}`, name:r.name, studio, meal:r.childrenMeal?'Kids Meal':(r.satMealChoice||''), type:'ALC' });
     });
   });
+  return labels;
+}
+
+// One-off labels added in the preview modal
+let _oneOffLabels = {}; // key → [{id, name, studio, isVip, isAlc, hasGift, isFirstTimer, isOneOff}]
+
+function buildRegLabelList(comp, studioFilter) {
+  const studios = studioFilter ? [studioFilter] : getAllStudiosForComp(comp);
+  const labels = [];
+  studios.forEach(studio => {
+    const d = getStudioData(studio, comp);
+    d.vip.filter(r=>r.name).forEach(r => {
+      labels.push({ id:`${studio}::vip::${r.name}`, name:r.name, studio, isVip:true, isAlc:false, hasGift:true, isFirstTimer:r.firstTimer==='Yes' });
+    });
+    d.tickets.filter(r=>r.name).forEach(r => {
+      const alreadyVip = d.vip.find(v=>v.name&&v.name.trim().toLowerCase()===r.name.trim().toLowerCase());
+      if (alreadyVip) return;
+      if (!hasRegistrationLabel(d, r, studio)) return;
+      labels.push({ id:`${studio}::alc::${r.name}`, name:r.name, studio, isVip:false, isAlc:true, hasGift:r.gift||false, isFirstTimer:!!r.firstTimer });
+    });
+  });
+  return labels;
+}
+
+function showLabelPreview(type, comp, studioFilter) {
+  const key = `${type}::${comp}::${studioFilter||'all'}`;
+  if (!_deselectedLabels[key]) _deselectedLabels[key] = new Set();
+  if (!_oneOffLabels[key]) _oneOffLabels[key] = [];
+
+  const buildAll = () => {
+    const base = type === 'dinner'
+      ? buildDinnerLabelList(comp, studioFilter)
+      : buildRegLabelList(comp, studioFilter);
+    return [...base, ..._oneOffLabels[key]];
+  };
+
+  const refresh = () => {
+    const labels = buildAll();
+    const desel = _deselectedLabels[key];
+
+    // Group by studio
+    const byStudio = {};
+    labels.forEach(l => {
+      const s = l.studio || 'One-Off / Walk-In';
+      if (!byStudio[s]) byStudio[s] = [];
+      byStudio[s].push(l);
+    });
+
+    const totalSelected = labels.filter(l=>!desel.has(l.id)).length;
+
+    const studioRows = Object.entries(byStudio).map(([studio, people]) => `
+      <div style="margin-bottom:0.75rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;padding-bottom:2px;border-bottom:1px solid var(--border)">
+          <span style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:700">${studio}</span>
+          <span style="display:flex;gap:6px">
+            <button onclick="selectAllStudio('${key}','${studio}',true)" style="font-size:0.58rem;background:none;border:none;color:var(--gold);cursor:pointer;text-decoration:underline">all</button>
+            <button onclick="selectAllStudio('${key}','${studio}',false)" style="font-size:0.58rem;background:none;border:none;color:var(--muted);cursor:pointer;text-decoration:underline">none</button>
+          </span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${people.map(l => {
+            const on = !desel.has(l.id);
+            const badges = [
+              l.isVip ? '<span style="font-size:0.58rem;background:var(--gold);color:#fff;padding:1px 4px;border-radius:3px;margin-left:3px">VIP</span>' : '',
+              l.isAlc ? '<span style="font-size:0.58rem;background:#555;color:#fff;padding:1px 4px;border-radius:3px;margin-left:3px">ALC</span>' : '',
+              l.isFirstTimer ? '<span style="font-size:0.58rem;background:#e67e22;color:#fff;padding:1px 4px;border-radius:3px;margin-left:3px">★ NEW</span>' : '',
+              l.isOneOff ? '<span style="font-size:0.58rem;background:#27ae60;color:#fff;padding:1px 4px;border-radius:3px;margin-left:3px">walk-in</span>' : '',
+            ].join('');
+            return `<label data-studio="${studio}" data-id="${l.id}" style="display:flex;align-items:center;gap:4px;font-size:0.72rem;cursor:pointer;padding:3px 8px;border:1px solid ${on?'var(--gold)':'#ddd'};border-radius:4px;background:${on?'#fffbf0':'#f9f9f9'};color:${on?'var(--text)':'#aaa'}">
+              <input type="checkbox" ${on?'checked':''} style="accent-color:var(--gold)" onchange="toggleLabelDesel('${key}','${l.id}',this.checked,this)"/>
+              ${l.name}${badges}
+              ${l.isOneOff?`<button onclick="removeOneOff('${key}','${l.id}')" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:0.7rem;padding:0 0 0 3px" title="Remove">✕</button>`:''}
+            </label>`;
+          }).join('')}
+        </div>
+      </div>`).join('');
+
+    const oneOffSection = type === 'reg' ? `
+      <div style="margin-top:0.75rem;padding:0.6rem;background:#fff;border:1px solid var(--border);border-radius:6px">
+        <div style="font-size:0.65rem;font-weight:700;color:var(--muted);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.08em">➕ Add Walk-In / Last Minute</div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+          <input id="oneOffName" type="text" placeholder="Full name" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:0.75rem;width:160px"/>
+          <input id="oneOffStudio" type="text" placeholder="Studio (optional)" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:0.75rem;width:140px"/>
+          <label style="display:flex;align-items:center;gap:4px;font-size:0.7rem;cursor:pointer">
+            <input id="oneOffNew" type="checkbox" style="accent-color:var(--gold)"/> ★ First Timer
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:0.7rem;cursor:pointer">
+            <input id="oneOffVip" type="checkbox" style="accent-color:var(--gold)"/> VIP
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:0.7rem;cursor:pointer">
+            <input id="oneOffGift" type="checkbox" style="accent-color:var(--gold)"/> Gift
+          </label>
+          <button onclick="addOneOffLabel('${key}')" style="background:var(--gold);color:#fff;border:none;border-radius:4px;padding:4px 12px;font-size:0.72rem;cursor:pointer;font-weight:700">Add Label</button>
+        </div>
+      </div>` : '';
+
+    document.getElementById('_labelPreviewBody').innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+        <span style="font-size:0.72rem;color:var(--muted)"><strong>${totalSelected}</strong> labels selected</span>
+        <span style="display:flex;gap:8px">
+          <button onclick="selectAllLabels('${key}',true)" style="font-size:0.65rem;background:none;border:none;color:var(--gold);cursor:pointer;text-decoration:underline">Select All</button>
+          <button onclick="selectAllLabels('${key}',false)" style="font-size:0.65rem;background:none;border:none;color:var(--muted);cursor:pointer;text-decoration:underline">Deselect All</button>
+        </span>
+      </div>
+      <div style="max-height:45vh;overflow-y:auto;padding:0.5rem;border:1px solid var(--border);border-radius:6px;background:#faf8f3">
+        ${studioRows || '<p style="color:var(--muted);font-size:0.75rem">No labels.</p>'}
+      </div>
+      ${oneOffSection}`;
+
+    // Update print button count
+    const btn = document.querySelector('#modalBox button[onclick*="executeLabelPrint"]');
+    if (btn) btn.textContent = `🖨️ Print ${totalSelected} Labels`;
+  };
+
+  // Store refresh fn globally so sub-functions can call it
+  window._refreshLabelPreview = refresh;
+  window._currentLabelKey = key;
+  window._currentLabelType = type;
+  window._currentLabelComp = comp;
+  window._currentLabelFilter = studioFilter;
+
+  document.getElementById('modalIcon').textContent = type === 'dinner' ? '🍽️' : '🏷️';
+  document.getElementById('modalTitle').textContent = type === 'dinner' ? 'Dinner Labels Preview' : 'Registration Labels Preview';
+  document.getElementById('modalBody').innerHTML = `
+    <div id="_labelPreviewBody"></div>
+    <div style="display:flex;gap:0.5rem;justify-content:center;margin-top:0.75rem">
+      <button class="btn btn-sm btn-outline" style="width:auto" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-sm" style="width:auto;background:var(--gold);color:var(--black)" onclick="executeLabelPrint('${type}','${comp}','${studioFilter||''}','${key}')">🖨️ Print Labels</button>
+    </div>`;
+  document.getElementById('modalBox').querySelector('.btn').style.display = 'none';
+  document.getElementById('modalOverlay').style.display = 'flex';
+  refresh();
+}
+
+function addOneOffLabel(key) {
+  const name = document.getElementById('oneOffName')?.value?.trim();
+  if (!name) return;
+  const studio = document.getElementById('oneOffStudio')?.value?.trim() || 'Walk-In';
+  const isFirstTimer = document.getElementById('oneOffNew')?.checked || false;
+  const isVip = document.getElementById('oneOffVip')?.checked || false;
+  const hasGift = document.getElementById('oneOffGift')?.checked || false;
+  const id = `oneoff::${Date.now()}::${name}`;
+  _oneOffLabels[key].push({ id, name, studio, isVip, isAlc:!isVip, hasGift, isFirstTimer, isOneOff:true });
+  _deselectedLabels[key]?.delete(id); // auto-select new
+  document.getElementById('oneOffName').value = '';
+  document.getElementById('oneOffStudio').value = '';
+  document.getElementById('oneOffNew').checked = false;
+  document.getElementById('oneOffVip').checked = false;
+  document.getElementById('oneOffGift').checked = false;
+  window._refreshLabelPreview?.();
+}
+
+function removeOneOff(key, id) {
+  if (_oneOffLabels[key]) _oneOffLabels[key] = _oneOffLabels[key].filter(l=>l.id!==id);
+  _deselectedLabels[key]?.delete(id);
+  window._refreshLabelPreview?.();
+}
+
+function selectAllLabels(key, checked) {
+  const type = window._currentLabelType;
+  const comp = window._currentLabelComp;
+  const sf   = window._currentLabelFilter;
+  const base = type === 'dinner' ? buildDinnerLabelList(comp, sf) : buildRegLabelList(comp, sf);
+  const all  = [...base, ...(_oneOffLabels[key]||[])];
+  if (!_deselectedLabels[key]) _deselectedLabels[key] = new Set();
+  if (checked) _deselectedLabels[key].clear();
+  else all.forEach(l => _deselectedLabels[key].add(l.id));
+  window._refreshLabelPreview?.();
+}
+
+function selectAllStudio(key, studio, checked) {
+  const type = window._currentLabelType;
+  const comp = window._currentLabelComp;
+  const sf   = window._currentLabelFilter;
+  const base = type === 'dinner' ? buildDinnerLabelList(comp, sf) : buildRegLabelList(comp, sf);
+  const all  = [...base, ...(_oneOffLabels[key]||[])];
+  if (!_deselectedLabels[key]) _deselectedLabels[key] = new Set();
+  const studioLabels = all.filter(l => (l.studio||'Walk-In') === studio);
+  if (checked) studioLabels.forEach(l => _deselectedLabels[key].delete(l.id));
+  else studioLabels.forEach(l => _deselectedLabels[key].add(l.id));
+  window._refreshLabelPreview?.();
+}
+
+function toggleLabelDesel(key, id, checked, el) {
+  if (!_deselectedLabels[key]) _deselectedLabels[key] = new Set();
+  if (checked) {
+    _deselectedLabels[key].delete(id);
+    el.closest('label').style.border = '1px solid var(--gold)';
+    el.closest('label').style.background = '#fffbf0';
+    el.closest('label').style.color = 'var(--text)';
+  } else {
+    _deselectedLabels[key].add(id);
+    el.closest('label').style.border = '1px solid #ddd';
+    el.closest('label').style.background = '#f9f9f9';
+    el.closest('label').style.color = '#aaa';
+  }
+  // Update count in print button
+  const [type, comp, sf] = key.split('::');
+  const labels = type === 'dinner' ? buildDinnerLabelList(comp, sf||undefined) : buildRegLabelList(comp, sf||undefined);
+  const total = labels.filter(l=>!_deselectedLabels[key].has(l.id)).length;
+  const printBtn = document.querySelector('#modalBox button[onclick*="executeLabelPrint"]');
+  if (printBtn) printBtn.textContent = `🖨️ Print ${total} Labels`;
+}
+
+function executeLabelPrint(type, comp, studioFilter, key) {
+  closeModal();
+  document.getElementById('modalBox').querySelector('.btn').style.display = '';
+  const desel = _deselectedLabels[key] || new Set();
+  if (type === 'dinner') {
+    const labels = buildDinnerLabelList(comp, studioFilter||undefined).filter(l=>!desel.has(l.id));
+    doPrintDinnerLabels(labels);
+  } else {
+    const labels = buildRegLabelList(comp, studioFilter||undefined).filter(l=>!desel.has(l.id));
+    doPrintRegLabels(labels);
+  }
+}
+
+function printDinnerLabels(comp, studioFilter) {
+  showLabelPreview('dinner', comp, studioFilter);
+}
+
+function doPrintDinnerLabels(labels) {
+  if (!labels.length) { showModal('ℹ️','No Labels','No dinner labels to print.'); return; }
+
+  // Avery 6521: 1" x 2.625", 3 cols x 10 rows = 30/sheet
+  // Page: 8.5 x 11, top margin 0.5in, left 0.19in, col gap 0.125in
+
+  const pages = [];
+  for (let i = 0; i < labels.length; i += 30) pages.push(labels.slice(i, i+30));
+
+  const sheetsHTML = pages.map(page => {
+    while (page.length % 3 !== 0) page.push(null);
+    const labelHTML = page.map(l => {
+      if (!l) return `<div class="label"></div>`;
+      const len = l.name.length;
+      const sz = len > 22 ? '9pt' : len > 17 ? '11pt' : len > 13 ? '13pt' : '15pt';
+      const wrap = len > 17 ? 'normal' : 'nowrap';
+      return `<div class="label">
+        <img class="logo" src="${LOGO_DATA_URL}" alt=""/>
+        <div class="name" style="font-size:${sz};white-space:${wrap}">${l.name}</div>
+      </div>`;
+    }).join('');
+    return `<div class="sheet"><div class="grid">${labelHTML}</div></div>`;
+  }).join('');
 
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head>
   <title>Dinner Labels</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700;900&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&display=swap');
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: 'Cormorant Garamond', Georgia, serif; background: white; }
-    .sheet { width: 8.5in; padding: 0.5in 0.19in; }
-    .label-grid { display: grid; grid-template-columns: repeat(3, 2.625in); gap: 0 0.125in; }
+    body { background:#fff; font-family:'Cormorant Garamond',Georgia,serif; }
+    .sheet {
+      width: 8.5in;
+      height: 11in;
+      padding: 0.5in 0.19in 0;
+      overflow: hidden;
+      page-break-after: always;
+    }
+    .sheet:last-child { page-break-after: avoid; }
+    .grid {
+      display: grid;
+      grid-template-columns: 2.625in 2.625in 2.625in;
+      grid-template-rows: repeat(10, 1in);
+      column-gap: 0.125in;
+      row-gap: 0;
+    }
     .label {
-      width: 2.625in; height: 1in;
-      display: flex; align-items: center;
-      padding: 0.06in 0.1in; gap: 0.08in;
+      width: 2.625in;
+      height: 1in;
+      display: flex;
+      align-items: center;
+      gap: 0.07in;
+      padding: 0 0.1in;
       overflow: hidden;
     }
-    .label-logo {
-      width: 0.45in; height: 0.45in; flex-shrink: 0;
+    .logo {
+      width: 0.42in;
+      height: 0.42in;
+      flex-shrink: 0;
+      object-fit: contain;
     }
-    .label-text { flex: 1; overflow: hidden; }
-    .label-name {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-style: normal;
+    .name {
+      flex: 1;
       font-weight: 900;
       line-height: 1.2;
       color: #111;
       overflow: hidden;
-    }
-    .label-name.short  { font-size: 15pt; white-space: nowrap; }
-    .label-name.medium { font-size: 12pt; white-space: nowrap; }
-    .label-name.long   { font-size: 9.5pt; white-space: normal; word-break: break-word; }
-    .label-studio {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 7.5pt;
-      color: #555;
-      letter-spacing: 0.03em;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-top: 2px;
+      word-break: break-word;
     }
     @media print {
-      @page { size: letter; margin: 0; }
-      .sheet { padding: 0.5in 0.19in; }
+      @page { size: 8.5in 11in; margin: 0; }
+      body { margin: 0; }
+      .sheet { padding: 0.5in 0.19in 0; }
     }
-  </style></head><body>
-  <div class="sheet"><div class="label-grid">
-  ${labels.map(l => {
-    const nameClass = l.name.length > 22 ? 'long' : l.name.length > 16 ? 'medium' : 'short';
-    return `<div class="label">
-    <img class="label-logo" src="${LOGO_DATA_URL}" alt="FADS"/>
-    <div class="label-text">
-      <div class="label-name ${nameClass}">${l.name}</div>
-      <div class="label-studio">${l.studio}</div>
-    </div>
-  </div>`;
-  }).join('')}
-  </div></div>
-  <script>setTimeout(()=>window.print(),500);<\/script>
-  </body></html>`);
+  </style>
+</head><body>
+  ${sheetsHTML}
+  <script>setTimeout(()=>window.print(),400);<\/script>
+</body></html>`);
   w.document.close();
 }
 
 function printRegistrationLabels(comp, studioFilter) {
-  // Avery 5163 — 2" x 4" — 10 labels per sheet, 2 across x 5 down
-  const studios = studioFilter ? [studioFilter] : getAllStudiosForComp(comp);
+  showLabelPreview('reg', comp, studioFilter);
+}
 
-  const labels = [];
-  studios.forEach(studio => {
-    const d = getStudioData(studio, comp);
-    // VIPs — get everything
-    d.vip.filter(r=>r.name).forEach(r => {
-      labels.push({ name:r.name, studio, isVip:true, isAlc:false, hasGift:true });
-    });
-    // ALC ticket holders
-    d.tickets.filter(r=>r.name).forEach(r => {
-      const alreadyVip = d.vip.find(v=>v.name&&v.name.trim().toLowerCase()===r.name.trim().toLowerCase());
-      if (!alreadyVip) {
-        labels.push({ name:r.name, studio, isVip:false, isAlc:true, hasGift:r.gift||false });
-      }
-    });
-    // ALC meal only
-    d.meals.filter(r=>r.name).forEach(r => {
-      const already = labels.find(l=>l.studio===studio&&l.name.trim().toLowerCase()===r.name.trim().toLowerCase());
-      if (!already) {
-        labels.push({ name:r.name, studio, isVip:false, isAlc:true, hasGift:false });
-      }
-    });
-  });
-
+function doPrintRegLabels(labels) {
+  if (!labels.length) { showModal('ℹ️','No Labels','No registration labels to print.'); return; }
   const w = window.open('','_blank');
+  const pages = [];
+  for (let i = 0; i < labels.length; i += 10) pages.push(labels.slice(i, i+10));
+  if (pages.length && pages[pages.length-1].length % 2 !== 0) pages[pages.length-1].push(null);
+
+  const pagesHTML = pages.map((page, pi) => {
+    const rows = [];
+    for (let r = 0; r < page.length; r += 2) {
+      const cells = [page[r], page[r+1]].map(l => {
+        if (!l) return '<div class="label"></div>';
+        const nc = l.name.length > 22 ? 'long' : l.name.length > 16 ? 'medium' : 'short';
+        const newBadge = l.isFirstTimer
+          ? '<span class="new-badge">★ FIRST TIME COMPETITOR</span>'
+          : '';
+        return `<div class="label${l.isFirstTimer?' is-new':''}">` +
+          '<div class="label-header">' +
+            `<img class="label-logo" src="${LOGO_DATA_URL}" alt="FADS"/>` +
+            newBadge +
+          '</div>' +
+          '<div class="label-name ' + nc + '">' + l.name + '</div>' +
+          '<div class="label-studio">' + l.studio + '</div>' +
+          '<div class="label-checks">' +
+            '<div class="check-item"><div class="box ' + (l.isVip?'checked':'') + '"></div> VIP</div>' +
+            '<div class="check-item"><div class="box ' + (l.isAlc?'checked':'') + '"></div> ALA-CARTE</div>' +
+            '<div class="check-item"><div class="box ' + (l.hasGift?'checked':'') + '"></div> WELCOME GIFT</div>' +
+          '</div>' +
+          '<div class="label-number"># <span class="num-line">&nbsp;</span></div>' +
+          '</div>';
+      }).join('');
+      rows.push('<div class="label-row">' + cells + '</div>');
+    }
+    return '<div class="sheet' + (pi < pages.length-1 ? ' page-break' : '') + '">' + rows.join('') + '</div>';
+  }).join('');
+
   w.document.write(`<!DOCTYPE html><html><head>
   <title>Registration Labels</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: Arial, sans-serif; background: white; }
-    .sheet { width: 8.5in; padding: 0.5in 0.15in; }
-    .label-grid { display: grid; grid-template-columns: repeat(2, 4in); gap: 0 0.19in; }
-    .label {
-      width: 4in; height: 2in;
-      padding: 0.15in 0.18in;
-      display: flex; flex-direction: column; justify-content: center;
-      gap: 4px;
-    }
-    .label-header { display: flex; align-items: center; gap: 0.1in; margin-bottom: 4px; }
-    .label-logo { height: 0.35in; }
-    .label-name { font-weight: bold; line-height: 1.1; color: #111; }
-    .label-name.short  { font-size: 15pt; }
-    .label-name.medium { font-size: 12pt; }
-    .label-name.long   { font-size: 9.5pt; word-break: break-word; }
-    .label-studio { font-size: 9.5pt; color: #444; margin-bottom: 4px; }
-    .label-checks { display: flex; gap: 0.2in; align-items: center; }
-    .check-item { display: flex; align-items: center; gap: 4px; font-size: 8.5pt; font-weight: bold; }
-    .box { width: 11px; height: 11px; border: 1.5px solid #111; display: inline-block; flex-shrink: 0; position: relative; }
-    .box.checked::after { content: ""; position: absolute; top: 1px; left: 2px; width: 5px; height: 7px; border-right: 2px solid #111; border-bottom: 2px solid #111; transform: rotate(45deg); }
-    .label-number { font-size: 8.5pt; margin-top: 6px; color: #333; display: flex; align-items: center; gap: 4px; }
-    .num-line { display: inline-block; width: 1.3in; border-bottom: 1px solid #111; }
+    body { font-family:Arial,sans-serif; background:white; }
+    .sheet { width:8.5in; height:11in; padding:0.5in 0.15in 0 0.15in; display:flex; flex-direction:column; overflow:hidden; }
+    .page-break { page-break-after:always; }
+    .label-row { display:flex; height:2in; flex-shrink:0; }
+    .label { width:4in; height:2in; padding:0.08in 0.14in; display:flex; flex-direction:column; justify-content:center; gap:0; overflow:hidden; flex-shrink:0; }
+    .label:first-child { margin-right:0.19in; }
+    .label.is-new { background:#fffbf0; }
+    .label-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:2px; }
+    .label-logo { height:0.2in; }
+    .new-badge { font-size:6.5pt; font-weight:900; color:#e67e22; letter-spacing:0.04em; border:1.5px solid #e67e22; border-radius:3px; padding:0 4px; white-space:nowrap; }
+    .label-name { font-weight:bold; line-height:1.15; color:#111; margin-bottom:1px; }
+    .label-name.short  { font-size:13pt; }
+    .label-name.medium { font-size:10.5pt; }
+    .label-name.long   { font-size:8.5pt; word-break:break-word; line-height:1.2; }
+    .label-studio { font-size:7.5pt; color:#555; margin-bottom:3px; }
+    .label-checks { display:flex; gap:0.11in; align-items:center; }
+    .check-item { display:flex; align-items:center; gap:3px; font-size:7pt; font-weight:bold; white-space:nowrap; }
+    .box { width:9px; height:9px; border:1.5px solid #111; display:inline-block; flex-shrink:0; position:relative; }
+    .box.checked::after { content:""; position:absolute; top:0px; left:1px; width:4px; height:6px; border-right:2px solid #111; border-bottom:2px solid #111; transform:rotate(45deg); }
+    .label-number { font-size:7pt; margin-top:3px; color:#333; display:flex; align-items:center; gap:4px; }
+    .num-line { display:inline-block; width:1.1in; border-bottom:1px solid #111; }
+    .is-new .label-name { color:#8B6914; }
     @media print {
-      @page { size: letter; margin: 0; }
-      .sheet { padding: 0.5in 0.15in; }
+      @page { size:letter; margin:0; }
+      body { background:white; margin:0; padding:0; }
+      .label.is-new { background:#fffbf0 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     }
   </style></head><body>
-  <div class="sheet"><div class="label-grid">
-  ${labels.map(l=>{
-    const nc = l.name.length > 22 ? 'long' : l.name.length > 16 ? 'medium' : 'short';
-    return `<div class="label">
-    <div class="label-header">
-      <img class="label-logo" src="${LOGO_DATA_URL}" alt="FADS"/>
-    </div>
-    <div class="label-name ${nc}">${l.name}</div>
-    <div class="label-studio">${l.studio}</div>
-    <div class="label-checks">
-      <div class="check-item"><div class="box ${l.isVip?'checked':''}"></div> VIP</div>
-      <div class="check-item"><div class="box ${l.isAlc?'checked':''}"></div> ALA-CARTE</div>
-      <div class="check-item"><div class="box ${l.hasGift?'checked':''}"></div> WELCOME GIFT</div>
-    </div>
-    <div class="label-number"># <span class="num-line">&nbsp;</span></div>
-  </div>`;}).join('')}
-  </div></div>
-  <script>setTimeout(()=>window.print(),500);<\/script>
+  ${pagesHTML}
+  <script>setTimeout(()=>window.print(),500);<\\/script>
   </body></html>`);
   w.document.close();
 }
+
+
 
 // ═══════════════════════════════════════════════════════
 // PAYMENTS
@@ -3822,7 +4241,7 @@ async function renderPaymentsTable() {
       const vipRev    = d.vip.filter(r=>r.name).length * 695;
       const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
       const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-      const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+      const mealRev   = calcAlcMealRevenue(d);
       const totalOwed = vipRev + ticketRev + entryRev + mealRev;
 
       const payments = await loadPayments(studio, comp);
@@ -5037,11 +5456,7 @@ async function loadWestLoopData() {
   if (!confirm('Replace all West Loop data for Chicago Open 2026?')) return;
   const studio = 'West Loop'; const comp = 'Chicago Open 2026';
   const key = studio + '::' + comp;
-  if (!appState.visitingStudios) appState.visitingStudios = [];
-  if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
-    appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
-  }
+  // West Loop is a core studio — do NOT add to visitingStudios
   const data = {
     vip: [
       { name:'Cameron Gabehart', proam:'Professional', meal:'', allergy:'' },
@@ -5083,11 +5498,7 @@ async function loadWilmetteData() {
   if (!confirm('Replace all Wilmette data for Chicago Open 2026?')) return;
   const studio = 'Wilmette'; const comp = 'Chicago Open 2026';
   const key = studio + '::' + comp;
-  if (!appState.visitingStudios) appState.visitingStudios = [];
-  if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
-    appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
-  }
+  // Wilmette is a core studio — do NOT add to visitingStudios
   const data = {
     vip: [
       // 3 VIP Full Packages @$695 each
@@ -5292,7 +5703,329 @@ async function loadMenomoneeFallsData() {
   renderAdminTab(); renderPaymentsTable();
 }
 
-// ─── QUICK STATUS SUMMARY PDF ───
+// ─── SEATING LIST VIEWS ───
+
+function setSeatingView(view) {
+  const diagramEl = document.getElementById('setupContent');
+  const listEl    = document.getElementById('seatingListContent');
+  const btnD = document.getElementById('setupViewDiagram');
+  const btnW = document.getElementById('setupViewWeekend');
+  const btnB = document.getElementById('setupViewBanquet');
+
+  [btnD, btnW, btnB].forEach(b => { if(b) { b.style.background=''; b.style.color=''; b.className='btn btn-sm btn-outline'; b.style.width='auto'; }});
+
+  if (view === 'diagram') {
+    diagramEl.style.display = '';
+    listEl.style.display = 'none';
+    btnD.className = 'btn btn-sm';
+    btnD.style.background = 'var(--gold)';
+    btnD.style.color = 'var(--black)';
+    renderSetupTab();
+  } else {
+    diagramEl.style.display = 'none';
+    listEl.style.display = '';
+    if (view === 'weekend') {
+      btnW.className = 'btn btn-sm';
+      btnW.style.background = 'var(--gold)';
+      btnW.style.color = 'var(--black)';
+    } else {
+      btnB.className = 'btn btn-sm';
+      btnB.style.background = 'var(--gold)';
+      btnB.style.color = 'var(--black)';
+    }
+    renderSeatingList(view);
+  }
+}
+
+function getStudioWeekendCount(studio, comp) {
+  if (studio === 'Great Lakes') return 0; // crew only — no competitor seating
+  const d = getStudioData(studio, comp);
+  const vips = d.vip.filter(r=>r.name).length;
+  const alc  = d.tickets.filter(r=>r.name).length;
+  return vips + alc;
+}
+
+// ── SEATING LIST — fully manual table number assignment ──
+// _seatingData[view::studio] = { tableNums: [1,2,3], sizes: [8,8,7] }
+let _seatingData = {};
+
+function getSeatingKey(view, studio) { return `${view}::${studio}`; }
+
+function getStudioSeating(view, studio, comp) {
+  const key = getSeatingKey(view, studio);
+  if (_seatingData[key]) return _seatingData[key];
+  // Auto-calculate default
+  const count = view === 'banquet' ? getStudioDinnerCount(studio, comp) : getStudioWeekendCount(studio, comp);
+  const sizes  = assignTables(count);
+  // Auto-assign sequential numbers based on sorted position
+  return null; // will be assigned during render
+}
+
+function buildSeatingAssignments(view, comp) {
+  const allStudios = getAllStudiosForComp(comp);
+  const studios = allStudios.map(s => ({
+    studio: s,
+    count: view === 'banquet' ? getStudioDinnerCount(s, comp) : getStudioWeekendCount(s, comp)
+  })).filter(s => s.count > 0).sort((a,b) => b.count - a.count);
+
+  // First pass: assign auto table numbers to studios without manual data
+  let nextAuto = 1;
+  // Collect all manually assigned numbers to avoid conflicts
+  const manualNums = new Set();
+  studios.forEach(s => {
+    const key = getSeatingKey(view, s.studio);
+    if (_seatingData[key]) _seatingData[key].tableNums.forEach(n => manualNums.add(n));
+  });
+
+  return studios.map(s => {
+    const key = getSeatingKey(view, s.studio);
+    if (_seatingData[key]) {
+      return { studio: s.studio, count: s.count, key,
+               tableNums: _seatingData[key].tableNums,
+               sizes: _seatingData[key].sizes || assignTables(s.count) };
+    }
+    // Auto-assign: skip any already manually used numbers
+    const sizes = assignTables(s.count);
+    const tableNums = sizes.map(() => {
+      while (manualNums.has(nextAuto)) nextAuto++;
+      const n = nextAuto++;
+      return n;
+    });
+    return { studio: s.studio, count: s.count, key, tableNums, sizes };
+  });
+}
+
+function renderSeatingList(view) {
+  const el = document.getElementById('seatingListContent');
+  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const assignments = buildSeatingAssignments(view, comp);
+  const allUsedNums = assignments.flatMap(a => a.tableNums);
+  const maxNum = allUsedNums.length ? Math.max(...allUsedNums) : 0;
+  const judgesStart = maxNum + 1;
+  const judgesEnd   = maxNum + 2;
+  const totalGuests = assignments.reduce((s,a) => s + a.count, 0);
+  const isbanquet = view === 'banquet';
+
+  const rows = assignments.map((a, ai) => {
+    const tableInputs = a.tableNums.map((num, ti) => `
+      <span style="display:inline-flex;align-items:center;gap:2px;background:#f5f0e8;border:1px solid var(--border);border-radius:4px;padding:2px 4px;margin:2px">
+        <span style="font-size:0.62rem;color:var(--muted)">#</span>
+        <input type="number" value="${num}" min="1" max="999"
+          style="width:42px;font-size:0.75rem;font-weight:700;color:var(--gold);border:none;background:transparent;text-align:center;padding:0"
+          onchange="seatingSetNum('${view}','${a.studio}',${ti},+this.value)"
+          title="Table number"/>
+        <span style="font-size:0.6rem;color:var(--muted)">(${a.sizes[ti]||'?'})</span>
+        <button onclick="seatingRemoveTable('${view}','${a.studio}',${ti})" style="background:none;border:none;cursor:pointer;color:var(--red);padding:0;font-size:0.65rem;line-height:1" title="Remove table">✕</button>
+      </span>`).join('');
+
+    return `<tr>
+      <td style="font-weight:600;color:var(--gold-light);min-width:130px">${a.studio}</td>
+      <td style="text-align:center;color:var(--muted)">${a.count}</td>
+      <td style="text-align:center;color:var(--muted)">${a.tableNums.length}</td>
+      <td>
+        ${tableInputs}
+        <button onclick="seatingAddTable('${view}','${a.studio}')" style="background:none;border:1px dashed var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:0.65rem;padding:2px 6px;margin:2px" title="Add a table">+ table</button>
+        <button onclick="seatingReset('${view}','${a.studio}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:0.6rem;margin-left:2px" title="Reset to auto">↺</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title">${isbanquet ? '🍽️ Banquet' : '📋 Weekend'} Seating — ${comp}</div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+          <button class="btn btn-sm btn-outline" style="width:auto" onclick="seatingResetAll('${view}')">↺ Reset All to Auto</button>
+          <button class="btn btn-sm btn-outline" style="width:auto" onclick="renderSeatingList('${view}')">🔄 Refresh</button>
+          <button class="btn btn-sm" style="width:auto;background:var(--gold);color:var(--black)" onclick="printSeatingList('${view}')">🖨️ Print</button>
+        </div>
+      </div>
+      <div class="section-body">
+        <p style="font-size:0.67rem;color:var(--muted);margin-bottom:0.75rem">
+          Type any table number you want — just click the number and change it. Add or remove tables with the buttons. Judges &amp; Officials auto-assign to #${judgesStart} &amp; #${judgesEnd}.
+        </p>
+        <table class="data-table">
+          <thead><tr>
+            <th>Studio</th>
+            <th style="text-align:center">Guests</th>
+            <th style="text-align:center">Tables</th>
+            <th>Table Numbers (click any # to edit)</th>
+          </tr></thead>
+          <tbody>
+            ${rows}
+            ${isbanquet ? `<tr style="background:#faf8f3">
+              <td style="font-weight:600;color:var(--gold)">Judges &amp; Officials</td>
+              <td style="text-align:center;color:var(--muted)">—</td>
+              <td style="text-align:center;color:var(--muted)">2</td>
+              <td style="font-size:0.72rem;color:var(--muted)">#${judgesStart} &amp; #${judgesEnd} (auto — always after last studio)</td>
+            </tr>` : ''}
+          </tbody>
+          <tfoot><tr class="total-row">
+            <td>TOTAL</td>
+            <td style="text-align:center">${totalGuests}</td>
+            <td style="text-align:center">${judgesEnd}</td>
+            <td></td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+}
+
+function seatingSetNum(view, studio, tableIdx, newNum) {
+  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const key = getSeatingKey(view, studio);
+  if (!_seatingData[key]) {
+    const a = buildSeatingAssignments(view, comp).find(x => x.studio === studio);
+    _seatingData[key] = { tableNums: [...(a?.tableNums||[1])], sizes: [...(a?.sizes||[6])] };
+  }
+  _seatingData[key].tableNums[tableIdx] = parseInt(newNum) || 1;
+  // Don't re-render on every keypress — user is typing
+}
+
+function seatingAddTable(view, studio) {
+  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const key = getSeatingKey(view, studio);
+  if (!_seatingData[key]) {
+    const a = buildSeatingAssignments(view, comp).find(x => x.studio === studio);
+    _seatingData[key] = { tableNums: [...(a?.tableNums||[])], sizes: [...(a?.sizes||[])] };
+  }
+  // Find next available number
+  const used = new Set(Object.values(_seatingData).flatMap(d => d.tableNums));
+  let next = 1;
+  while (used.has(next)) next++;
+  _seatingData[key].tableNums.push(next);
+  _seatingData[key].sizes.push(6);
+  renderSeatingList(view);
+}
+
+function seatingRemoveTable(view, studio, tableIdx) {
+  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const key = getSeatingKey(view, studio);
+  if (!_seatingData[key]) {
+    const a = buildSeatingAssignments(view, comp).find(x => x.studio === studio);
+    _seatingData[key] = { tableNums: [...(a?.tableNums||[])], sizes: [...(a?.sizes||[])] };
+  }
+  if (_seatingData[key].tableNums.length > 1) {
+    _seatingData[key].tableNums.splice(tableIdx, 1);
+    _seatingData[key].sizes.splice(tableIdx, 1);
+  }
+  renderSeatingList(view);
+}
+
+function seatingReset(view, studio) {
+  delete _seatingData[getSeatingKey(view, studio)];
+  renderSeatingList(view);
+}
+
+function seatingResetAll(view) {
+  if (!confirm('Reset ALL table assignments back to auto-calculated?')) return;
+  Object.keys(_seatingData).filter(k => k.startsWith(view + '::')).forEach(k => delete _seatingData[k]);
+  renderSeatingList(view);
+}
+
+
+
+function printSeatingList(view) {
+  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const isbanquet = view === 'banquet';
+
+  const assignments = buildSeatingAssignments(view, comp);
+  const allNums = assignments.flatMap(a => a.tableNums);
+  const maxNum = allNums.length ? Math.max(...allNums) : 0;
+  const judgesStart = maxNum + 1;
+  const judgesEnd   = maxNum + 2;
+
+  const formatTables = (nums) => {
+    if (nums.length === 1) return `#${nums[0]}`;
+    if (nums.length === 2) return `#${nums[0]} &amp; #${nums[1]}`;
+    return `#${nums.slice(0,-1).join(', #')} &amp; #${nums[nums.length-1]}`;
+  };
+
+  const allCards = [
+    ...assignments.map((a,i) => ({
+      studio: a.studio,
+      tableStr: formatTables(a.tableNums),
+      isJudge: false,
+      alt: i % 2 === 1
+    })),
+    // Only add Judges & Officials card for BANQUET (they need dinner seats)
+    // For weekend they're on the platform judging — no table needed
+    ...(isbanquet ? [{ studio: 'Judges &amp; Officials', tableStr: `#${judgesStart} &amp; #${judgesEnd}`, isJudge: true, alt: false }] : [])
+  ];
+
+  // 10 cards per page (2 per row × 5 rows)
+  const CARDS_PER_PAGE = 10;
+  const pages = [];
+  for (let i = 0; i < allCards.length; i += CARDS_PER_PAGE) pages.push(allCards.slice(i, i + CARDS_PER_PAGE));
+
+  const weekendCSS = `
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#fff; font-family:'Cormorant Garamond',Georgia,serif; }
+    .page { width:8.5in; min-height:11in; padding:0.55in 0.65in; page-break-after:always; display:flex; flex-direction:column; }
+    .page:last-child { page-break-after:avoid; }
+    .header { text-align:center; margin-bottom:0.35in; border-bottom:2px solid #c9a84c; padding-bottom:0.2in; }
+    .comp-name { font-family:'Great Vibes',cursive; font-size:52pt; color:#8B6914; line-height:1.1; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:0.14in; }
+    .card { border:1px solid #e8dfc8; border-radius:6px; padding:0.18in 0.25in; display:flex; justify-content:space-between; align-items:center; background:#fdfaf4; }
+    .card.alt { background:#fff; }
+    .card.judge { background:#f5f0e8; border-color:#c9a84c; border-width:1.5px; }
+    .studio { font-size:20pt; font-weight:600; color:#1a1a1a; font-family:'Cormorant Garamond',serif; }
+    .card.judge .studio { color:#8B6914; font-style:italic; }
+    .tables { font-size:26pt; font-weight:700; color:#8B6914; font-family:'Cormorant Garamond',serif; white-space:nowrap; text-align:right; }
+    .card.judge .tables { color:#c9a84c; }
+    .footer { margin-top:auto; padding-top:0.15in; text-align:center; font-size:8pt; color:#ccc; letter-spacing:0.08em; border-top:1px solid #e8dfc8; }
+    @media print {
+      @page { size:letter portrait; margin:0; }
+      body { margin:0; }
+      .card { background:#fdfaf4 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .card.alt { background:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .card.judge { background:#f5f0e8 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    }`;
+
+  const banquetCSS = weekendCSS
+    .replace('.studio { font-size:20pt', '.studio { font-size:20pt; font-style:italic')
+    .replace("color:#8B6914; line-height:1.1", "color:#5c3a00; line-height:1.1");
+
+  const css = isbanquet ? banquetCSS : weekendCSS;
+
+  const banquetHeader = `
+    <div class="header">
+      <div style="font-size:13pt;color:#c9a84c;letter-spacing:0.3em;margin-bottom:4px">✦ ✦ ✦</div>
+      <div class="comp-name" style="color:#5c3a00">${comp}</div>
+      <div style="font-size:10pt;letter-spacing:0.35em;text-transform:uppercase;color:#8B6914;margin-top:5px;font-family:'Cormorant Garamond',serif">Saturday Banquet Seating</div>
+    </div>`;
+
+  const weekendHeader = `<div class="header"><div class="comp-name">${comp}</div></div>`;
+  const headerHTML = isbanquet ? banquetHeader : weekendHeader;
+
+  const renderCards = cards => `
+    <div class="grid">
+      ${cards.map(c => `
+        <div class="card${c.isJudge?' judge':c.alt?' alt':''}">
+          <span class="studio">${c.studio}</span>
+          <span class="tables">${c.tableStr}</span>
+        </div>`).join('')}
+    </div>`;
+
+  const pagesHTML = pages.map((cards, pi) => `
+    <div class="page">
+      ${headerHTML}
+      ${renderCards(cards)}
+      ${pi === pages.length-1 ? `<div class="footer">Fred Astaire Dance Studios Illinois &bull; ${judgesEnd} tables</div>` : ''}
+    </div>`).join('');
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+  <title>${comp} Seating</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Great+Vibes&display=swap" rel="stylesheet">
+  <style>${css}</style>
+</head><body>
+  ${pagesHTML}
+  <script>setTimeout(()=>window.print(),500);<\/script>
+</body></html>`);
+  w.document.close();
+}
+
 async function generateStatusSummaryPDF() {
   const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
   const allStudios = getAllStudiosForComp(comp);
@@ -5303,7 +6036,7 @@ async function generateStatusSummaryPDF() {
     const vipRev    = d.vip.filter(r=>r.name).length * 695;
     const ticketRev = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
     const entryRev  = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-    const mealRev   = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+    const mealRev   = calcAlcMealRevenue(d);
     const totalOwed = vipRev + ticketRev + entryRev + mealRev;
     if (totalOwed === 0) continue;
 
@@ -5611,88 +6344,116 @@ function addCheckRow(section) {
   renderChecksTab();
 }
 
-function printCheckLabels(section) {
+function buildCheckLabelList(section) {
   const d = checksData;
-  if (!d) return;
-
-  // Build label array: { line1: payee, line2: for/role, line3: check info, line4: amount }
-  const labels = [];
+  if (!d) return [];
   const comp = 'Chicago Open 2026';
+  const DOUBLE_LABEL_ROLES = ['Judge', 'MC', 'Registrar/Scrutineer', 'DJ', 'Social Media'];
+  const DOUBLE_LABEL_NAMES = ['Alex Casper', 'Alex C.'];
+  const labels = [];
+  let uid = 0;
 
-  const addLabel = (payTo, forDesc, checkNum, amount, extra) => {
-    if (!payTo && !checkNum && !amount) return; // skip blank rows
-    labels.push({ payTo: payTo||'—', forDesc, checkNum: checkNum||'', amount: amount||'', extra: extra||'' });
+  const addLabel = (payTo, forDesc, checkNum, amount, section) => {
+    if (!payTo && !checkNum && !amount) return;
+    labels.push({ id: `check::${uid++}`, payTo: payTo||'—', forDesc, checkNum: checkNum||'', amount: amount||'', section });
   };
 
   if (section === 'crew' || section === 'all') {
     d.crew.forEach(r => {
       const payTo = r.checkTo || r.legalName;
-      addLabel(payTo, r.role + (r.legalName !== payTo ? ` (${r.legalName})` : ''), r.checkNum, r.amount);
+      const needsDouble = DOUBLE_LABEL_ROLES.includes(r.role) || DOUBLE_LABEL_NAMES.some(n => r.legalName && r.legalName.includes(n));
+      addLabel(payTo, r.role + (r.legalName !== payTo ? ` (${r.legalName})` : ''), r.checkNum, r.amount, 'crew');
+      if (needsDouble) addLabel(payTo, r.role + (r.legalName !== payTo ? ` (${r.legalName})` : ''), r.checkNum, r.amount, 'crew');
     });
   }
-
   if (section === 'proDivisions' || section === 'all') {
     d.proDivisions.forEach(r => {
-      // Leader check
-      if (r.leaderName || r.leaderCheck || r.leaderAmt) {
-        addLabel(r.leaderName, `${r.division} — ${r.place} (Leader)`, r.leaderCheck, '');
-      }
-      // Follower check
-      if (r.followerName || r.followerCheck || r.followerAmt) {
-        addLabel(r.followerName, `${r.division} — ${r.place} (Follower)`, r.followerCheck, '');
-      }
+      if (r.division || r.place) addLabel(r.division, r.place, r.leaderCheck||r.followerCheck||'', '', 'proDivisions');
     });
   }
-
   if (section === 'topTeachers' || section === 'all') {
     d.topTeachers.forEach(r => {
-      addLabel(r.name, `${r.category} — ${r.place}`, r.checkNum, '');
+      if (r.category || r.place) addLabel(r.category, r.place, r.checkNum||'', '', 'topTeachers');
     });
   }
-
   if (section === 'potOfGold' || section === 'all') {
     d.potOfGold.forEach(r => {
-      addLabel(r.name, 'Pot of Gold', r.checkNum, r.amount);
+      addLabel(r.name, 'Pot of Gold', r.checkNum, r.amount, 'potOfGold');
     });
   }
+  return labels;
+}
 
-  if (labels.length === 0) {
-    showModal('⚠️', 'No Labels to Print', 'No check data has been entered for this section yet. Fill in the names and amounts first.');
-    return;
-  }
+function printCheckLabels(section) {
+  if (!checksData) { showModal('⚠️','Not Loaded','Open the Checks tab first to load check data.'); return; }
 
-  // Avery 8160: 3 cols × 10 rows, 2.625" × 1" each
-  // Page margins: top 0.5", left 0.19", gaps: col 0.125", row 0
-  const labelCSS = `
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: Arial, sans-serif; }
-    .page { width:8.5in; padding: 0.5in 0.19in 0; }
-    .row  { display:flex; margin-bottom:0; }
-    .label {
-      width: 2.625in; height: 1in;
-      padding: 0.1in 0.15in;
-      overflow: hidden;
-      display: flex; flex-direction: column; justify-content: center;
-    }
-    .label:not(:last-child) { margin-right: 0.125in; }
-    .comp  { font-size: 7px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
-    .payto { font-size: 11px; font-weight: 700; color: #111; line-height: 1.2; }
-    .ford  { font-size: 8.5px; color: #444; margin-top: 2px; line-height: 1.2; }
-    .check { font-size: 8px; color: #666; margin-top: 3px; }
-    .amt   { font-size: 11px; font-weight: 700; color: #8B6914; margin-top: 2px; }
-    @media print {
-      body { margin:0; }
-      .page { page-break-after: always; }
-      .page:last-child { page-break-after: avoid; }
-    }
-  `;
+  const labels = buildCheckLabelList(section);
+  if (!labels.length) { showModal('ℹ️','No Labels','No check data entered yet for this section.'); return; }
 
-  // Chunk into pages of 30 (3×10)
+  const previewKey = `checks::${section}`;
+  if (!_deselectedLabels[previewKey]) _deselectedLabels[previewKey] = new Set();
+  const desel = _deselectedLabels[previewKey];
+
+  // Group by section for display
+  const sectionNames = { crew:'Judges & Crew', proDivisions:'Pro Divisions', topTeachers:'Top Teachers', potOfGold:'Pot of Gold', all:'All Sections' };
+  const bySection = {};
+  labels.forEach(l => {
+    const sec = sectionNames[l.section] || l.section;
+    if (!bySection[sec]) bySection[sec] = [];
+    bySection[sec].push(l);
+  });
+
+  const sectionRows = Object.entries(bySection).map(([sec, items]) => `
+    <div style="margin-bottom:0.75rem">
+      <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:700;margin-bottom:0.3rem;padding-bottom:2px;border-bottom:1px solid var(--border)">${sec}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">
+        ${items.map(l => `
+          <label style="display:flex;align-items:center;gap:4px;font-size:0.7rem;cursor:pointer;padding:3px 8px;border:1px solid ${desel.has(l.id)?'#ddd':'var(--gold)'};border-radius:4px;background:${desel.has(l.id)?'#f9f9f9':'#fffbf0'};color:${desel.has(l.id)?'#aaa':'var(--text)'}">
+            <input type="checkbox" ${desel.has(l.id)?'':'checked'} style="accent-color:var(--gold)" onchange="toggleLabelDesel('${previewKey}','${l.id}',this.checked,this)"/>
+            <span>
+              <strong>${l.payTo}</strong>
+              <span style="color:var(--muted);font-size:0.62rem"> — ${l.forDesc}</span>
+              ${l.checkNum?`<span style="font-size:0.6rem;color:var(--muted)"> #${l.checkNum}</span>`:''}
+              ${l.amount?`<span style="color:var(--gold);font-size:0.65rem"> $${l.amount}</span>`:''}
+            </span>
+          </label>`).join('')}
+      </div>
+    </div>`).join('');
+
+  const totalSelected = labels.filter(l=>!desel.has(l.id)).length;
+
+  document.getElementById('modalIcon').textContent = '🏷️';
+  document.getElementById('modalTitle').textContent = 'Check Labels Preview';
+  document.getElementById('modalBody').innerHTML = `
+    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.75rem;text-align:left">
+      Uncheck any labels you don't want to print. <strong>${totalSelected}</strong> labels selected.
+    </div>
+    <div style="max-height:55vh;overflow-y:auto;text-align:left;padding:0.5rem;border:1px solid var(--border);border-radius:6px;background:#faf8f3">
+      ${sectionRows}
+    </div>
+    <div style="display:flex;gap:0.5rem;justify-content:center;margin-top:1rem">
+      <button class="btn btn-sm btn-outline" style="width:auto" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-sm" style="width:auto;background:var(--gold);color:var(--black)" onclick="executeCheckLabelPrint('${section}','${previewKey}')">🖨️ Print ${totalSelected} Labels</button>
+    </div>`;
+  document.getElementById('modalBox').querySelector('.btn').style.display = 'none';
+  document.getElementById('modalOverlay').style.display = 'flex';
+}
+
+function executeCheckLabelPrint(section, previewKey) {
+  closeModal();
+  document.getElementById('modalBox').querySelector('.btn').style.display = '';
+  const desel = _deselectedLabels[previewKey] || new Set();
+  const labels = buildCheckLabelList(section).filter(l => !desel.has(l.id));
+  if (!labels.length) { showModal('ℹ️','No Labels','All labels were deselected.'); return; }
+  doPrintCheckLabels(labels);
+}
+
+function doPrintCheckLabels(labels) {
+  const comp = 'Chicago Open 2026';
   const pages = [];
   for (let i = 0; i < labels.length; i += 30) pages.push(labels.slice(i, i+30));
 
   const pagesHTML = pages.map(page => {
-    // Pad to 30
     while (page.length % 3 !== 0) page.push(null);
     const rows = [];
     for (let r = 0; r < page.length; r += 3) {
@@ -5702,7 +6463,7 @@ function printCheckLabels(section) {
             <div class="payto">${l.payTo}</div>
             <div class="ford">${l.forDesc}</div>
             ${l.checkNum ? `<div class="check">Check #${l.checkNum}</div>` : ''}
-            ${l.amount   ? `<div class="amt">$${parseFloat(l.amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>` : ''}
+            ${l.amount   ? `<div class="amt">$${parseFloat(l.amount||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>` : ''}
            </div>`
         : `<div class="label"></div>`
       ).join('');
@@ -5711,16 +6472,32 @@ function printCheckLabels(section) {
     return `<div class="page">${rows.join('')}</div>`;
   }).join('');
 
-  const w = window.open('', '_blank');
+  const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head>
-    <title>Check Labels — ${comp}</title>
-    <style>${labelCSS}</style>
-  </head><body>
-    ${pagesHTML}
-    <script>setTimeout(()=>window.print(),400);<\/script>
-  </body></html>`);
+  <title>Check Labels</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:Arial,sans-serif; }
+    .page { width:8.5in; height:11in; padding:0.5in 0.19in 0; page-break-after:always; overflow:hidden; }
+    .page:last-child { page-break-after:avoid; }
+    .row { display:flex; height:1in; }
+    .label { width:2.625in; height:1in; padding:0.08in 0.12in; overflow:hidden; display:flex; flex-direction:column; justify-content:center; page-break-inside:avoid; }
+    .label:not(:last-child) { margin-right:0.125in; }
+    .comp  { font-size:7px; color:#888; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:1px; }
+    .payto { font-size:10px; font-weight:700; color:#111; line-height:1.25; }
+    .ford  { font-size:9px; color:#8B6914; font-weight:700; margin-top:2px; line-height:1.2; }
+    .check { font-size:7.5px; color:#666; margin-top:2px; }
+    .amt   { font-size:10px; font-weight:700; color:#8B6914; margin-top:2px; }
+    @media print { @page { size:letter; margin:0; } body { margin:0; } }
+  </style>
+</head><body>
+  ${pagesHTML}
+  <script>setTimeout(()=>window.print(),500);<\\/script>
+</body></html>`);
   w.document.close();
 }
+
+
 
 // ─── STUDIO SUMMARY PDF ───
 async function generateStudioSummaryPDF(studio, comp) {
@@ -5730,7 +6507,7 @@ async function generateStudioSummaryPDF(studio, comp) {
   const vipRev     = vipCount * 695;
   const ticketRev  = d.tickets.reduce((s,r)=>s+calcTicketFee(r),0);
   const entryRev   = calcCompEntriesTotal(d.compEntries, comp, d.entryOverride);
-  const mealRev    = d.meals.reduce((s,r)=>s+calcMealFee(r),0);
+  const mealRev    = calcAlcMealRevenue(d);
   const totalOwed  = vipRev + ticketRev + entryRev + mealRev;
   const totalPaid  = payments.reduce((s,p)=>s+p.amount,0);
   const balance    = totalOwed - totalPaid;
@@ -6174,6 +6951,7 @@ function assignTables(count) {
 }
 
 function getStudioDinnerCount(studio, comp) {
+  if (studio === 'Great Lakes') return 0; // crew — seated as Judges & Officials at banquet
   const d = getStudioData(studio, comp);
   const vipCount = d.vip.filter(r=>r.name).length;
   const alcWithCocktail = d.meals.filter(r => {
@@ -6553,6 +7331,259 @@ function printSetupDiagram() {
 }
 
 
+// ─── DANCE ENTRIES ───
+
+const DANCE_STYLES = {
+  'American Smooth':   { dances: ['WA','TA','FT','VW'], label: 'Am. Smooth' },
+  'American Rhythm':   { dances: ['CC','R','ECS','BOL','MA'], label: 'Am. Rhythm' },
+  'Int\'l Ballroom':   { dances: ['WA','TA','VW','FT','QS'], label: 'Int\'l Ballroom' },
+  'Int\'l Latin':      { dances: ['CC','SA','R','PD','J'], label: 'Int\'l Latin' },
+  'Nightclub':         { dances: ['H','WCS','NC2S','SAL','BAC'], label: 'Nightclub' },
+  'Country':           { dances: ['CW','CC','ECS','WCS','TS'], label: 'Country' },
+  'Smooth Showcase':   { dances: ['SHOWCASE'], label: 'Showcase' },
+  'Solo':              { dances: ['SOLO'], label: 'Solo' },
+};
+
+const AGE_CATS = ['PT1','PT2','J1','J2','Youth A','A+','A1','A2','A3','B1','B2','B3','C1','C2','C3'];
+
+// Age category order for "one up one down" rule
+const AGE_ORDER = {'PT1':0,'PT2':1,'J1':2,'J2':3,'Youth A':4,'A+':5,'A1':6,'A2':7,'A3':8,'B1':9,'B2':10,'B3':11,'C1':12,'C2':13,'C3':14};
+
+const LEVELS = [
+  { num:1,  label:'1 — Social Foundation',         group:'Group 1' },
+  { num:2,  label:'2 — Beginners Bronze',           group:'Group 1' },
+  { num:3,  label:'3 — Newcomers Bronze',           group:'Group 1' },
+  { num:4,  label:'4 — Preliminary Bronze Closed',  group:'Group 2' },
+  { num:5,  label:'5 — Intermediate Bronze Closed', group:'Group 2' },
+  { num:6,  label:'6 — Senior Bronze Closed',       group:'Group 3' },
+  { num:7,  label:'7 — Full Bronze Closed',         group:'Group 3' },
+  { num:8,  label:'8 — Preliminary Silver Closed',  group:'Group 4' },
+  { num:9,  label:'9 — Intermediate Silver Closed', group:'Group 4' },
+  { num:'9A',label:'9A — Senior Silver Closed',     group:'Group 5' },
+  { num:10, label:'10 — Full Silver Closed',        group:'Group 5' },
+  { num:11, label:'11 — Beginners Gold Closed',     group:'Group 6' },
+  { num:12, label:'12 — Intermediate Gold Closed',  group:'Group 6' },
+  { num:13, label:'13 — Full Gold Closed',          group:'Group 7' },
+  { num:14, label:'14 — Intermediate Bronze Open',  group:'Group 2' },
+  { num:15, label:'15 — Full Bronze Open',          group:'Group 3' },
+  { num:16, label:'16 — Intermediate Silver Open',  group:'Group 4' },
+  { num:17, label:'17 — Full Silver Open',          group:'Group 5' },
+  { num:18, label:'18 — Intermediate Gold Open',    group:'Group 6' },
+  { num:19, label:'19 — Full Gold Open',            group:'Group 7' },
+  { num:20, label:'20 — Open',                      group:'Open' },
+  { num:21, label:'21 — Bronze Proficiency',        group:'Proficiency' },
+  { num:22, label:'22 — Silver Proficiency',        group:'Proficiency' },
+  { num:23, label:'23 — Gold Proficiency',          group:'Proficiency' },
+];
+
+function getStudioPeople(d) {
+  const people = new Set();
+  d.vip.filter(r=>r.name).forEach(r=>people.add(r.name));
+  d.tickets.filter(r=>r.name).forEach(r=>people.add(r.name));
+  return [...people].sort();
+}
+
+function isDuplicateDance(entries, idx, student, teacher, level, ageCat, dance) {
+  if (!student || !teacher || !level || !ageCat || !dance) return false;
+  return entries.some((e, i) =>
+    i !== idx &&
+    e.student && e.student.trim().toLowerCase() === student.trim().toLowerCase() &&
+    e.teacher && e.teacher.trim().toLowerCase() === teacher.trim().toLowerCase() &&
+    String(e.level) === String(level) &&
+    e.ageCat === ageCat &&
+    e.dances && e.dances.includes(dance)
+  );
+}
+
+function isEntryComplete(e) {
+  return e.student && e.teacher && e.style && e.level && e.ageCat && e.dances && e.dances.length > 0;
+}
+
+function renderDanceEntries(d) {
+  const el = document.getElementById('danceEntriesList');
+  if (!el) return;
+  if (!d.danceEntries) d.danceEntries = [];
+
+  const people = getStudioPeople(d);
+
+  if (!d.danceEntries.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:0.75rem;padding:0.5rem 0">No entries yet. Click + Add Entry to start.</p>';
+    document.getElementById('danceEntryCount').textContent = '0';
+    return;
+  }
+
+  el.innerHTML = d.danceEntries.map((e, idx) => {
+    const style = DANCE_STYLES[e.style] || { dances:[] };
+    const dances = e.dances || [];
+    const complete = isEntryComplete(e);
+    const expanded = !complete || (d._expandedEntry === idx);
+
+    // Check duplicates
+    const dupDances = style.dances.filter(d2 =>
+      dances.includes(d2) && isDuplicateDance(d.danceEntries, idx, e.student, e.teacher, e.level, e.ageCat, d2)
+    );
+    const hasDup = dupDances.length > 0;
+
+    // ── COLLAPSED VIEW (complete entries) ──
+    if (complete && !expanded) {
+      const levelLabel = LEVELS.find(l=>String(l.num)===String(e.level))?.label || e.level;
+      return `<div class="de-row${hasDup?' duplicate':''}" style="cursor:pointer" onclick="expandEntry(${idx})">
+        <div style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0.75rem;flex-wrap:wrap">
+          <span style="font-weight:700;font-size:0.75rem;color:var(--text)">${e.student}</span>
+          <span style="font-size:0.65rem;color:var(--muted)">with ${e.teacher}</span>
+          <span style="font-size:0.62rem;background:#f5f0e8;padding:1px 6px;border-radius:3px;color:var(--muted)">${e.style}</span>
+          <span style="font-size:0.62rem;color:var(--muted)">Lv${e.level} · ${e.ageCat}</span>
+          <div style="display:flex;gap:3px;margin-left:4px">
+            ${dances.map(d2=>`<span style="font-size:0.62rem;background:${hasDup&&dupDances.includes(d2)?'#fee':'var(--gold)'};color:${hasDup&&dupDances.includes(d2)?'#c0392b':'#fff'};padding:1px 5px;border-radius:3px;font-weight:700">${d2}</span>`).join('')}
+          </div>
+          ${hasDup?'<span style="color:var(--red);font-size:0.65rem">⚠ dup</span>':''}
+          <span style="margin-left:auto;font-size:0.65rem;color:var(--muted)">✏️ edit</span>
+          <button onclick="event.stopPropagation();removeDanceEntry(${idx})" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:0.8rem">✕</button>
+        </div>
+      </div>`;
+    }
+
+    // ── EXPANDED VIEW ──
+    const danceButtons = style.dances.map(dance => {
+      const isSelected = dances.includes(dance);
+      const isBlocked = !isSelected && isDuplicateDance(d.danceEntries, idx, e.student, e.teacher, e.level, e.ageCat, dance);
+      const isDupSel  = isSelected && dupDances.includes(dance);
+      const cls = isDupSel ? 'blocked' : isSelected ? 'selected' : isBlocked ? 'blocked' : '';
+      return `<button class="de-dance-btn ${cls}" title="${isBlocked?'Duplicate — already entered':''}"
+        onclick="toggleDanceDance(${idx},'${dance}')">${dance}</button>`;
+    }).join('');
+
+    const peopleOpts = people.map(p => `<option ${e.student===p?'selected':''}>${p}</option>`).join('');
+    const styleOpts  = Object.keys(DANCE_STYLES).map(s => `<option ${e.style===s?'selected':''}>${s}</option>`).join('');
+    const levelOpts  = LEVELS.map(l => `<option value="${l.num}" ${String(e.level)===String(l.num)?'selected':''}>${l.label}</option>`).join('');
+    const ageOpts    = AGE_CATS.map(a => `<option ${e.ageCat===a?'selected':''}>${a}</option>`).join('');
+
+    return `<div class="de-row${hasDup?' duplicate':''}">
+      <div class="de-row-header">
+        <select style="min-width:160px" onchange="updateDanceEntry(${idx},'student',this.value)">
+          <option value="">— Student —</option>
+          ${peopleOpts}
+        </select>
+        <span style="color:var(--muted);font-size:0.7rem">with</span>
+        <input type="text" value="${e.teacher||''}" placeholder="Teacher name"
+          style="min-width:150px" onchange="updateDanceEntry(${idx},'teacher',this.value)"/>
+        <select onchange="updateDanceEntry(${idx},'style',this.value)">
+          <option value="">— Style —</option>
+          ${styleOpts}
+        </select>
+        <select onchange="updateDanceEntry(${idx},'level',this.value)">
+          <option value="">— Level —</option>
+          ${levelOpts}
+        </select>
+        <select onchange="updateDanceEntry(${idx},'ageCat',this.value)">
+          <option value="">— Age —</option>
+          ${ageOpts}
+        </select>
+        ${complete ? `<button onclick="collapseEntry(${idx})" style="font-size:0.65rem;background:var(--gold);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;margin-left:auto">Done ✓</button>` : ''}
+        <button onclick="removeDanceEntry(${idx})" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:0.9rem${complete?'':';margin-left:auto'}">✕</button>
+      </div>
+      <div class="de-dances">
+        <span style="font-size:0.62rem;color:var(--muted);margin-right:4px">Dances:</span>
+        ${e.style ? danceButtons : '<span style="font-size:0.65rem;color:var(--muted)">Select style first</span>'}
+        ${dances.length ? `<span style="font-size:0.62rem;color:var(--muted);margin-left:8px">${dances.length} dance${dances.length!==1?'s':''}</span>` : ''}
+      </div>
+      ${hasDup ? `<div class="de-dup-msg">⚠ Duplicate: ${dupDances.join(', ')} already entered for same student/teacher/level/age</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const totalDances = d.danceEntries.reduce((s,e) => s + (e.dances||[]).length, 0);
+  document.getElementById('danceEntryCount').textContent =
+    `${d.danceEntries.length} entries · ${totalDances} dances`;
+}
+
+function expandEntry(idx) {
+  const d = getStudioData(currentStudio, currentComp);
+  d._expandedEntry = idx;
+  renderDanceEntries(d);
+}
+
+function collapseEntry(idx) {
+  const d = getStudioData(currentStudio, currentComp);
+  d._expandedEntry = null;
+  renderDanceEntries(d);
+}
+
+function addDanceEntry() {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.danceEntries) d.danceEntries = [];
+  d.danceEntries.push({ student:'', teacher:'', style:'', level:'', ageCat:'', dances:[] });
+  d._expandedEntry = d.danceEntries.length - 1; // auto-expand new row
+  renderDanceEntries(d);
+  triggerAutoSave();
+}
+
+function updateDanceEntry(idx, field, val) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.danceEntries[idx]) return;
+  d.danceEntries[idx][field] = val;
+  if (field === 'style') d.danceEntries[idx].dances = [];
+  d._expandedEntry = idx; // keep expanded while editing
+  renderDanceEntries(d);
+  triggerAutoSave();
+}
+
+function toggleDanceDance(idx, dance) {
+  const d = getStudioData(currentStudio, currentComp);
+  const entry = d.danceEntries[idx];
+  if (!entry) return;
+  if (!entry.dances) entry.dances = [];
+
+  const alreadySelected = entry.dances.includes(dance);
+  if (alreadySelected) {
+    entry.dances = entry.dances.filter(d2 => d2 !== dance);
+  } else {
+    // Check for duplicate before adding
+    if (isDuplicateDance(d.danceEntries, idx, entry.student, entry.teacher, entry.level, entry.ageCat, dance)) {
+      showModal('⚠️', 'Duplicate Entry',
+        `<strong>${entry.student}</strong> is already entered in <strong>${dance}</strong> at Level ${entry.level} (${entry.ageCat}) with ${entry.teacher}.<br><br>Duplicates are not allowed.`);
+      return;
+    }
+    entry.dances.push(dance);
+  }
+  renderDanceEntries(d);
+  triggerAutoSave();
+}
+
+function removeDanceEntry(idx) {
+  const d = getStudioData(currentStudio, currentComp);
+  d.danceEntries.splice(idx, 1);
+  renderDanceEntries(d);
+  triggerAutoSave();
+}
+
+// ─── STUDIO QUICK OPEN & COMPLETION ───
+
+function quickOpenStudio(studioName) {
+  switchOrgTab('manage');
+  setTimeout(() => {
+    const sel = document.getElementById('manageStudioSelect');
+    if (sel) { sel.value = studioName; openOrgStudioEditor(); }
+  }, 100);
+}
+
+function toggleStudioComplete(studio, comp, e) {
+  e.stopPropagation(); // don't trigger card click
+  if (!appState.studioComplete) appState.studioComplete = {};
+  const key = `${studio}::${comp}`;
+  appState.studioComplete[key] = !appState.studioComplete[key];
+  triggerAutoSave();
+  renderStudiosTab();
+  const allStudios = getAllStudiosForComp(comp);
+  const allDone = allStudios.every(s => appState.studioComplete[`${s}::${comp}`]);
+  if (allDone && appState.studioComplete[key]) {
+    showModal('🎉', 'All Studios Complete!', 'Every studio is marked complete for ' + comp + '. You\'re ready!');
+  }
+}
+
+function isStudioComplete(studio, comp) {
+  return !!(appState.studioComplete && appState.studioComplete[`${studio}::${comp}`]);
+}
+
 // ═══════════════════════════════════════════════════════
 // INIT — wait for Firebase before loading
 // ═══════════════════════════════════════════════════════
@@ -6578,8 +7609,8 @@ initApp();
 </script>
 
 <!-- ── MODAL POPUPS ── -->
-<div id="modalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9000;align-items:center;justify-content:center" onclick="closeModal(event)">
-  <div id="modalBox" style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:2rem 2.5rem;max-width:420px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.4);position:relative" onclick="event.stopPropagation()">
+<div id="modalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9000;align-items:center;justify-content:center" onclick="closeModal(event)">
+  <div id="modalBox" style="background:#fff;border:1px solid #ddd;border-radius:12px;padding:2rem 2.5rem;max-width:440px;width:90%;text-align:center;box-shadow:0 12px 48px rgba(0,0,0,0.5);position:relative" onclick="event.stopPropagation()">
     <div id="modalIcon" style="font-size:2.2rem;margin-bottom:0.75rem"></div>
     <div id="modalTitle" style="font-family:'Cormorant Garamond',Georgia,serif;font-size:1.5rem;font-weight:700;color:var(--gold);margin-bottom:0.5rem"></div>
     <div id="modalBody" style="font-size:0.82rem;color:var(--text);line-height:1.7;margin-bottom:1.5rem"></div>
