@@ -3988,11 +3988,14 @@ function executeLabelPrint(type, comp, studioFilter, key) {
   closeModal();
   document.getElementById('modalBox').querySelector('.btn').style.display = '';
   const desel = _deselectedLabels[key] || new Set();
+  const oneOffs = _oneOffLabels[key] || [];
   if (type === 'dinner') {
-    const labels = buildDinnerLabelList(comp, studioFilter||undefined).filter(l=>!desel.has(l.id));
+    const base = buildDinnerLabelList(comp, studioFilter||undefined);
+    const labels = [...base, ...oneOffs].filter(l=>!desel.has(l.id));
     doPrintDinnerLabels(labels);
   } else {
-    const labels = buildRegLabelList(comp, studioFilter||undefined).filter(l=>!desel.has(l.id));
+    const base = buildRegLabelList(comp, studioFilter||undefined);
+    const labels = [...base, ...oneOffs].filter(l=>!desel.has(l.id));
     doPrintRegLabels(labels);
   }
 }
