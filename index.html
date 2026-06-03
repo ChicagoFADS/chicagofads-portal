@@ -5957,20 +5957,20 @@ function printSeatingList(view) {
     return `#${nums.slice(0,-1).join(', #')} &amp; #${nums[nums.length-1]}`;
   };
 
+  // Sort alphabetically, judges always last (banquet only)
+  const sortedAssignments = [...assignments].sort((a,b) => a.studio.localeCompare(b.studio));
   const allCards = [
-    ...assignments.map((a,i) => ({
+    ...sortedAssignments.map((a,i) => ({
       studio: a.studio,
       tableStr: formatTables(a.tableNums),
       isJudge: false,
       alt: i % 2 === 1
     })),
-    // Only add Judges & Officials card for BANQUET (they need dinner seats)
-    // For weekend they're on the platform judging — no table needed
     ...(isbanquet ? [{ studio: 'Judges &amp; Officials', tableStr: `#${judgesStart} &amp; #${judgesEnd}`, isJudge: true, alt: false }] : [])
   ];
 
-  // 10 cards per page (2 per row × 5 rows)
-  const CARDS_PER_PAGE = 10;
+  // Fit into exactly 2 pages max — calculate cards per page dynamically
+  const CARDS_PER_PAGE = Math.ceil(allCards.length / 2);
   const pages = [];
   for (let i = 0; i < allCards.length; i += CARDS_PER_PAGE) pages.push(allCards.slice(i, i + CARDS_PER_PAGE));
 
