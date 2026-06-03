@@ -3786,6 +3786,16 @@ function buildDinnerLabelList(comp, studioFilter) {
 // One-off labels added in the preview modal
 let _oneOffLabels = {}; // key → [{id, name, studio, isVip, isAlc, hasGift, isFirstTimer, isOneOff}]
 
+// Load saved one-offs from localStorage on startup
+try {
+  const saved = localStorage.getItem('_oneOffLabels');
+  if (saved) _oneOffLabels = JSON.parse(saved);
+} catch(e) {}
+
+function saveOneOffs() {
+  try { localStorage.setItem('_oneOffLabels', JSON.stringify(_oneOffLabels)); } catch(e) {}
+}
+
 function buildRegLabelList(comp, studioFilter) {
   const studios = studioFilter ? [studioFilter] : getAllStudiosForComp(comp);
   const labels = [];
@@ -3924,6 +3934,7 @@ function addOneOffLabel(key) {
   const id = `oneoff::${Date.now()}::${name}`;
   _oneOffLabels[key].push({ id, name, studio, isVip, isAlc:!isVip, hasGift, isFirstTimer, isOneOff:true });
   _deselectedLabels[key]?.delete(id); // auto-select new
+  saveOneOffs();
   document.getElementById('oneOffName').value = '';
   document.getElementById('oneOffStudio').value = '';
   document.getElementById('oneOffNew').checked = false;
@@ -3934,6 +3945,7 @@ function addOneOffLabel(key) {
 
 function removeOneOff(key, id) {
   if (_oneOffLabels[key]) _oneOffLabels[key] = _oneOffLabels[key].filter(l=>l.id!==id);
+  saveOneOffs();
   _deselectedLabels[key]?.delete(id);
   window._refreshLabelPreview?.();
 }
