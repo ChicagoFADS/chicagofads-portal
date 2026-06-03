@@ -3745,22 +3745,23 @@ const LOGO_DATA_URL = "data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUN
 // ─── LABEL PREVIEW & PRINT ───
 
 function hasRegistrationLabel(d, ticket, studio) {
-  // Only print reg label if person has more than just Saturday dinner
-  // Must have: VIP, OR session ticket, OR comp fee, OR gift, OR 2+ meals
   if (!ticket.name) return false;
-  const isVIP = ticket.vipAlc === 'VIP';
-  if (isVIP) return true;
-  const hasSessions = ticket.thuMat || ticket.thuEve || ticket.friMat || ticket.friEve || ticket.satMat;
-  if (hasSessions) return true;
+  // VIPs always get a label
+  if (ticket.vipAlc === 'VIP') return true;
+  // Anyone with comp fee gets a label
   if (ticket.compFee) return true;
+  // Anyone with a session ticket gets a label
+  if (ticket.thuMat || ticket.thuEve || ticket.friMat || ticket.friEve || ticket.satMat) return true;
+  // Anyone with a welcome gift gets a label
   if (ticket.gift) return true;
-  // Check meals — if more than just satCocktail, include them
-  const m = (d.meals || []).find(r => r.name && r.name.trim().toLowerCase() === ticket.name.trim().toLowerCase());
+  // Anyone with ANY meal package (not just sat cocktail) gets a label
+  const m = (d.meals || []).find(r => r.name && ticket.name && r.name.trim().toLowerCase() === ticket.name.trim().toLowerCase());
   if (m) {
-    const mealCount = [m.thuDinner, m.friBrk, m.friLunch, m.friDinner, m.satBrk, m.satLunch, m.satCocktail].filter(Boolean).length;
-    if (mealCount >= 2) return true;
-    // Only satCocktail = dinner-only = no reg label
+    const hasMeals = m.thuDinner || m.friBrk || m.friLunch || m.friDinner || m.satBrk || m.satLunch || m.satCocktail;
+    if (hasMeals) return true;
   }
+  // If they have a name and vipAlc set they're registered — give them a label
+  if (ticket.vipAlc === 'ALC') return true;
   return false;
 }
 
