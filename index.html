@@ -4034,10 +4034,14 @@ function doPrintDinnerLabels(labels) {
       const mealIcons = { 'Beef':'🐄', 'Fish':'🐟', 'Chicken':'🐔', 'Vegetarian':'🥕', 'Kids Meal':'👶' };
       const icon = mealIcons[l.meal] || '';
       return `<div class="label">
-        <img class="logo" src="${LOGO_DATA_URL}" alt=""/>
-        <div class="name ${nc}">${l.name}</div>
-        ${l.allergy ? `<div class="allergy">✱ ${l.allergy}</div>` : ''}
-        ${icon ? `<div class="meal-icon">${icon}</div>` : ''}
+        <div class="label-top">
+          <img class="logo" src="${LOGO_DATA_URL}" alt=""/>
+          <div class="name ${nc}">${l.name}</div>
+        </div>
+        <div class="label-bottom">
+          <span class="allergy">${l.allergy ? '✱ ' + l.allergy : ''}</span>
+          ${icon ? `<span class="meal-icon">${icon}</span>` : '<span></span>'}
+        </div>
       </div>`;
     }).join('');
     return `<div class="sheet"><div class="grid">${labelHTML}</div></div>`;
@@ -4069,49 +4073,64 @@ function doPrintDinnerLabels(labels) {
       width: 2.625in;
       height: 1in;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 0.07in;
-      padding: 0 0.1in;
+      justify-content: center;
+      padding: 0.06in 0.1in 0.04in;
       overflow: hidden;
       position: relative;
+      box-sizing: border-box;
+    }
+    .label-top {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.06in;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
     }
     .logo {
-      width: 0.42in;
-      height: 0.42in;
+      width: 0.32in;
+      height: 0.32in;
       flex-shrink: 0;
       object-fit: contain;
     }
     .name {
-      flex: 1;
       font-weight: 900;
-      line-height: 1.15;
+      line-height: 1.2;
       color: #111;
       overflow: hidden;
       word-break: break-word;
       text-align: center;
+      flex: 1;
     }
     .name.short  { font-size: 15pt; white-space: nowrap; }
     .name.medium { font-size: 13pt; white-space: nowrap; }
     .name.long   { font-size: 12pt; white-space: normal; }
     .name.xlong  { font-size: 10.5pt; white-space: normal; }
-    .meal-icon {
-      position: absolute;
-      bottom: 0.06in;
-      right: 0.08in;
-      font-size: 16pt;
-      line-height: 1;
+    .label-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      min-height: 0.18in;
+      flex-shrink: 0;
     }
     .allergy {
-      position: absolute;
-      bottom: 0.05in;
-      left: 0.1in;
-      font-size: 7pt;
-      font-weight: 700;
+      font-size: 6.5pt;
+      font-weight: 800;
       color: #c0392b;
       white-space: nowrap;
       overflow: hidden;
-      max-width: 1.8in;
       text-overflow: ellipsis;
+      max-width: 1.7in;
+    }
+    .meal-icon {
+      font-size: 14pt;
+      line-height: 1;
+      flex-shrink: 0;
+      margin-left: auto;
     }
     @media print {
       @page { size: 8.5in 11in; margin: 0; }
