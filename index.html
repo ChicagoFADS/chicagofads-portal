@@ -5985,9 +5985,9 @@ function printSeatingList(view) {
     .card { border:1px solid #e8dfc8; border-radius:6px; padding:0.18in 0.25in; display:flex; justify-content:space-between; align-items:center; background:#fdfaf4; }
     .card.alt { background:#fff; }
     .card.judge { background:#f5f0e8; border-color:#c9a84c; border-width:1.5px; }
-    .studio { font-size:20pt; font-weight:600; color:#1a1a1a; font-family:'Cormorant Garamond',serif; }
+    .studio { font-size:18pt; font-weight:600; color:#1a1a1a; font-family:'Cormorant Garamond',serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:3.2in; }
     .card.judge .studio { color:#8B6914; font-style:italic; }
-    .tables { font-size:26pt; font-weight:700; color:#8B6914; font-family:'Cormorant Garamond',serif; white-space:nowrap; text-align:right; }
+    .tables { font-size:22pt; font-weight:700; color:#8B6914; font-family:'Cormorant Garamond',serif; white-space:nowrap; text-align:right; padding-left:0.1in; flex-shrink:0; }
     .card.judge .tables { color:#c9a84c; }
     .footer { margin-top:auto; padding-top:0.15in; text-align:center; font-size:8pt; color:#ccc; letter-spacing:0.08em; border-top:1px solid #e8dfc8; }
     @media print {
@@ -6011,7 +6011,7 @@ function printSeatingList(view) {
       <div style="font-size:10pt;letter-spacing:0.35em;text-transform:uppercase;color:#8B6914;margin-top:5px;font-family:'Cormorant Garamond',serif">Saturday Banquet Seating</div>
     </div>`;
 
-  const weekendHeader = `<div class="header"><div class="comp-name">${comp}</div></div>`;
+  const weekendHeader = `<div class="header"><div class="comp-name">${comp}</div><div style="font-size:11pt;letter-spacing:0.3em;text-transform:uppercase;color:#aaa;font-family:'Cormorant Garamond',serif;margin-top:5px">Competition Seating Chart</div></div>`;
   const headerHTML = isbanquet ? banquetHeader : weekendHeader;
 
   const renderCards = cards => `
