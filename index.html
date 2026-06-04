@@ -4030,11 +4030,13 @@ function doPrintDinnerLabels(labels) {
     const labelHTML = page.map(l => {
       if (!l) return `<div class="label"></div>`;
       const len = l.name.length;
-      const sz = len > 22 ? '9pt' : len > 17 ? '11pt' : len > 13 ? '13pt' : '15pt';
-      const wrap = len > 17 ? 'normal' : 'nowrap';
+      const nc = len > 24 ? 'xlong' : len > 18 ? 'long' : len > 13 ? 'medium' : 'short';
+      const mealIcons = { 'Beef':'🐄', 'Fish':'🐟', 'Chicken':'🐔', 'Vegetarian':'🥕', 'Kids Meal':'👶' };
+      const icon = mealIcons[l.meal] || '';
       return `<div class="label">
         <img class="logo" src="${LOGO_DATA_URL}" alt=""/>
-        <div class="name" style="font-size:${sz};white-space:${wrap}">${l.name}</div>
+        <div class="name ${nc}">${l.name}</div>
+        ${icon ? `<div class="meal-icon">${icon}</div>` : ''}
       </div>`;
     }).join('');
     return `<div class="sheet"><div class="grid">${labelHTML}</div></div>`;
@@ -4070,6 +4072,7 @@ function doPrintDinnerLabels(labels) {
       gap: 0.07in;
       padding: 0 0.1in;
       overflow: hidden;
+      position: relative;
     }
     .logo {
       width: 0.42in;
@@ -4080,10 +4083,22 @@ function doPrintDinnerLabels(labels) {
     .name {
       flex: 1;
       font-weight: 900;
-      line-height: 1.2;
+      line-height: 1.15;
       color: #111;
       overflow: hidden;
       word-break: break-word;
+      text-align: center;
+    }
+    .name.short  { font-size: 15pt; white-space: nowrap; }
+    .name.medium { font-size: 13pt; white-space: nowrap; }
+    .name.long   { font-size: 12pt; white-space: normal; }
+    .name.xlong  { font-size: 10.5pt; white-space: normal; }
+    .meal-icon {
+      position: absolute;
+      bottom: 0.06in;
+      right: 0.08in;
+      font-size: 16pt;
+      line-height: 1;
     }
     @media print {
       @page { size: 8.5in 11in; margin: 0; }
