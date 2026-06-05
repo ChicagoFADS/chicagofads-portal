@@ -4030,12 +4030,12 @@ function doPrintDinnerLabels(labels) {
     const labelHTML = page.map(l => {
       if (!l) return `<div class="label"></div>`;
       const len = l.name.length;
-      const nc = len > 24 ? 'xlong' : len > 18 ? 'long' : len > 13 ? 'medium' : 'short';
+      const nc = len > 26 ? 'xlong' : len > 20 ? 'long' : len > 14 ? 'medium' : 'short';
       const mealIcons = { 'Beef':'🐄', 'Fish':'🐟', 'Chicken':'🐔', 'Vegetarian':'🥕', 'Kids Meal':'👶' };
       const icon = mealIcons[l.meal] || '';
       return `<div class="label">
+        <img class="logo" src="${LOGO_DATA_URL}" alt=""/>
         <div class="label-top">
-          <img class="logo" src="${LOGO_DATA_URL}" alt=""/>
           <div class="name ${nc}">${l.name}</div>
         </div>
         <div class="label-bottom">
@@ -4057,7 +4057,10 @@ function doPrintDinnerLabels(labels) {
     .sheet {
       width: 8.5in;
       height: 11in;
-      padding: 0.5in 0.19in 0;
+      padding-top: 0.5in;
+      padding-left: 0.19in;
+      padding-right: 0.19in;
+      padding-bottom: 0;
       overflow: hidden;
       page-break-after: always;
     }
@@ -4068,32 +4071,33 @@ function doPrintDinnerLabels(labels) {
       grid-template-rows: repeat(10, 1in);
       column-gap: 0.125in;
       row-gap: 0;
+      width: 8.125in;
     }
     .label {
       width: 2.625in;
       height: 1in;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 0.06in 0.1in 0.04in;
-      overflow: hidden;
       position: relative;
+      overflow: hidden;
       box-sizing: border-box;
+      padding: 0;
     }
     .label-top {
+      position: absolute;
+      top: 0.07in;
+      left: 0;
+      right: 0;
+      bottom: 0.2in;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.06in;
-      width: 100%;
-      flex: 1;
-      min-height: 0;
+      padding: 0 0.08in;
     }
     .logo {
-      width: 0.32in;
-      height: 0.32in;
-      flex-shrink: 0;
+      position: absolute;
+      top: 0.07in;
+      left: 0.07in;
+      width: 0.26in;
+      height: 0.26in;
       object-fit: contain;
     }
     .name {
@@ -4103,19 +4107,22 @@ function doPrintDinnerLabels(labels) {
       overflow: hidden;
       word-break: break-word;
       text-align: center;
-      flex: 1;
+      width: 100%;
+      padding: 0 0.08in;
     }
     .name.short  { font-size: 15pt; white-space: nowrap; }
-    .name.medium { font-size: 13pt; white-space: nowrap; }
-    .name.long   { font-size: 12pt; white-space: normal; }
-    .name.xlong  { font-size: 10.5pt; white-space: normal; }
+    .name.medium { font-size: 12.5pt; white-space: nowrap; }
+    .name.long   { font-size: 11pt; white-space: normal; }
+    .name.xlong  { font-size: 9.5pt; white-space: normal; }
     .label-bottom {
+      position: absolute;
+      bottom: 0.05in;
+      left: 0.08in;
+      right: 0.08in;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      width: 100%;
-      min-height: 0.18in;
-      flex-shrink: 0;
+      height: 0.15in;
     }
     .allergy {
       font-size: 6.5pt;
@@ -4124,18 +4131,23 @@ function doPrintDinnerLabels(labels) {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 1.7in;
+      max-width: 1.6in;
+      line-height: 1;
     }
     .meal-icon {
-      font-size: 14pt;
+      font-size: 12pt;
       line-height: 1;
       flex-shrink: 0;
-      margin-left: auto;
     }
     @media print {
       @page { size: 8.5in 11in; margin: 0; }
-      body { margin: 0; }
-      .sheet { padding: 0.5in 0.19in 0; }
+      body { margin: 0; padding: 0; }
+      .sheet {
+        padding-top: 0.5in;
+        padding-left: 0.19in;
+        padding-right: 0.19in;
+        padding-bottom: 0;
+      }
     }
   </style>
 </head><body>
