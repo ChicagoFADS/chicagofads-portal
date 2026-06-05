@@ -4034,8 +4034,8 @@ function doPrintDinnerLabels(labels) {
       const mealIcons = { 'Beef':'🐄', 'Fish':'🐟', 'Chicken':'🐔', 'Vegetarian':'🥕', 'Kids Meal':'👶' };
       const icon = mealIcons[l.meal] || '';
       return `<div class="label">
-        <img class="logo" src="${LOGO_DATA_URL}" alt=""/>
         <div class="label-top">
+          <img class="logo" src="${LOGO_DATA_URL}" alt=""/>
           <div class="name ${nc}">${l.name}</div>
         </div>
         <div class="label-bottom">
@@ -4076,26 +4076,25 @@ function doPrintDinnerLabels(labels) {
     .label {
       width: 2.625in;
       height: 1in;
-      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0.06in 0.15in;
       overflow: hidden;
       box-sizing: border-box;
+      position: relative;
     }
     .label-top {
-      position: absolute;
-      top: 0.08in;
-      left: 0.18in;
-      right: 0.18in;
-      bottom: 0.22in;
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 0.07in;
+      overflow: hidden;
+      flex: 1;
     }
     .logo {
-      position: absolute;
-      top: 0.08in;
-      left: 0.18in;
-      width: 0.22in;
-      height: 0.22in;
+      width: 0.28in;
+      height: 0.28in;
+      flex-shrink: 0;
       object-fit: contain;
     }
     .name {
@@ -4104,22 +4103,20 @@ function doPrintDinnerLabels(labels) {
       color: #111;
       overflow: hidden;
       word-break: break-word;
-      text-align: center;
-      width: 100%;
+      text-align: left;
+      flex: 1;
+      min-width: 0;
     }
-    .name.short  { font-size: 15pt; white-space: nowrap; }
-    .name.medium { font-size: 12.5pt; white-space: nowrap; }
-    .name.long   { font-size: 11pt; white-space: normal; }
-    .name.xlong  { font-size: 9.5pt; white-space: normal; }
+    .name.short  { font-size: 14pt; white-space: nowrap; }
+    .name.medium { font-size: 12pt; white-space: nowrap; }
+    .name.long   { font-size: 10.5pt; white-space: normal; }
+    .name.xlong  { font-size: 9pt; white-space: normal; }
     .label-bottom {
-      position: absolute;
-      bottom: 0.06in;
-      left: 0.18in;
-      right: 0.18in;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      height: 0.14in;
+      margin-top: 0.03in;
+      flex-shrink: 0;
     }
     .allergy {
       font-size: 6.5pt;
@@ -4128,13 +4125,14 @@ function doPrintDinnerLabels(labels) {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 1.4in;
+      max-width: 1.6in;
       line-height: 1;
     }
     .meal-icon {
       font-size: 13pt;
       line-height: 1;
       flex-shrink: 0;
+      margin-left: auto;
     }
     @media print {
       @page { size: 8.5in 11in; margin: 0; }
@@ -6555,11 +6553,11 @@ function doPrintCheckLabels(labels) {
     .row { display:flex; height:1in; }
     .label { width:2.625in; height:1in; padding:0.08in 0.12in; overflow:hidden; display:flex; flex-direction:column; justify-content:center; page-break-inside:avoid; }
     .label:not(:last-child) { margin-right:0.125in; }
-    .comp  { font-size:7px; color:#888; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:1px; }
-    .payto { font-size:10px; font-weight:700; color:#111; line-height:1.25; }
-    .ford  { font-size:9px; color:#8B6914; font-weight:700; margin-top:2px; line-height:1.2; }
-    .check { font-size:7.5px; color:#666; margin-top:2px; }
-    .amt   { font-size:10px; font-weight:700; color:#8B6914; margin-top:2px; }
+    .comp  { font-size:7px; color:#888; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:2px; }
+    .payto { font-size:14px; font-weight:700; color:#111; line-height:1.2; }
+    .ford  { font-size:12px; color:#8B6914; font-weight:700; margin-top:3px; line-height:1.2; }
+    .check { font-size:9px; color:#666; margin-top:2px; }
+    .amt   { font-size:13px; font-weight:700; color:#8B6914; margin-top:2px; }
     @media print { @page { size:letter; margin:0; } body { margin:0; } }
   </style>
 </head><body>
