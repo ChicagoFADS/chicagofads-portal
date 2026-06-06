@@ -1171,6 +1171,7 @@ async function loadState() {
     } catch(e) {}
   }
   _isLoading = false;
+  await loadSeatingData();
 
   populateLoginDropdown();
 
@@ -5810,6 +5811,21 @@ function getStudioWeekendCount(studio, comp) {
 // _seatingData[view::studio] = { tableNums: [1,2,3], sizes: [8,8,7] }
 let _seatingData = {};
 
+// Load seating data from Firebase
+async function loadSeatingData() {
+  try {
+    const val = await fbGet('seatingData');
+    if (val) _seatingData = JSON.parse(val);
+  } catch(e) {}
+}
+
+async function saveSeatingData() {
+  try {
+    await fbSet('seatingData', JSON.stringify(_seatingData));
+    showSaveBanner();
+  } catch(e) { console.error('saveSeatingData error', e); }
+}
+
 function getSeatingKey(view, studio) { return `${view}::${studio}`; }
 
 function getStudioSeating(view, studio, comp) {
@@ -5898,6 +5914,7 @@ function renderSeatingList(view) {
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
           <button class="btn btn-sm btn-outline" style="width:auto" onclick="seatingResetAll('${view}')">↺ Reset All to Auto</button>
           <button class="btn btn-sm btn-outline" style="width:auto" onclick="renderSeatingList('${view}')">🔄 Refresh</button>
+          <button class="btn btn-sm btn-success" style="width:auto" onclick="saveSeatingData().then(()=>renderSeatingList('${view}'))">💾 Save Tables</button>
           <button class="btn btn-sm" style="width:auto;background:var(--gold);color:var(--black)" onclick="printSeatingList('${view}')">🖨️ Print</button>
         </div>
       </div>
@@ -6068,11 +6085,12 @@ function printSeatingList(view) {
     body { background:#fff; font-family:'Playfair Display',Georgia,serif; }
     .page {
       width:8.5in; min-height:11in;
-      padding:0.5in 0.6in;
+      padding:0.55in 0.65in;
       page-break-after:always;
       display:flex; flex-direction:column;
       background:#fff;
-      border:0.18in solid #5c3a00;
+      outline:0.15in solid #5c3a00;
+      outline-offset:-0.15in;
       box-sizing:border-box;
     }
     .page:last-child { page-break-after:avoid; }
@@ -6108,7 +6126,7 @@ function printSeatingList(view) {
     @media print {
       @page { size:letter portrait; margin:0; }
       body { margin:0; }
-      .page { border:0.18in solid #5c3a00 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .page { outline:0.15in solid #5c3a00 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
       .card { background:#fdfaf4 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
       .card.alt { background:#fff8ef !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
       .card.judge { background:#f5ede0 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
