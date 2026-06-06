@@ -5903,7 +5903,7 @@ function renderSeatingList(view) {
       </div>
       <div class="section-body">
         <p style="font-size:0.67rem;color:var(--muted);margin-bottom:0.75rem">
-          Type any table number you want — just click the number and change it. Add or remove tables with the buttons. Judges &amp; Officials auto-assign to #${judgesStart} &amp; #${judgesEnd}.
+          Type any table number you want — just click the number and change it. Add or remove tables with the buttons.
         </p>
         <table class="data-table">
           <thead><tr>
@@ -5914,12 +5914,28 @@ function renderSeatingList(view) {
           </tr></thead>
           <tbody>
             ${rows}
-            ${isbanquet ? `<tr style="background:#faf8f3">
-              <td style="font-weight:600;color:var(--gold)">Judges &amp; Officials</td>
-              <td style="text-align:center;color:var(--muted)">—</td>
-              <td style="text-align:center;color:var(--muted)">2</td>
-              <td style="font-size:0.72rem;color:var(--muted)">#${judgesStart} &amp; #${judgesEnd} (auto — always after last studio)</td>
-            </tr>` : ''}
+            ${isbanquet ? (() => {
+              const jKey = getSeatingKey(view, '__judges__');
+              if (!_seatingData[jKey]) _seatingData[jKey] = { tableNums:[1,2], sizes:[8,8] };
+              const jd = _seatingData[jKey];
+              const tableInputs = jd.tableNums.map((num, ti) => `
+                <span style="display:inline-flex;align-items:center;gap:2px;background:#f5f0e8;border:1px solid var(--gold);border-radius:4px;padding:2px 4px;margin:2px">
+                  <span style="font-size:0.62rem;color:var(--muted)">#</span>
+                  <input type="number" value="${num}" min="1" max="999"
+                    style="width:42px;font-size:0.75rem;font-weight:700;color:var(--gold);border:none;background:transparent;text-align:center;padding:0"
+                    onchange="seatingSetNum('${view}','__judges__',${ti},+this.value)"/>
+                  <button onclick="seatingRemoveTable('${view}','__judges__',${ti})" style="background:none;border:none;cursor:pointer;color:var(--red);padding:0;font-size:0.65rem">✕</button>
+                </span>`).join('');
+              return `<tr style="background:#faf8f3">
+                <td style="font-weight:600;color:var(--gold)">Judges &amp; Officials</td>
+                <td style="text-align:center;color:var(--muted)">—</td>
+                <td style="text-align:center;color:var(--muted)">${jd.tableNums.length}</td>
+                <td>
+                  ${tableInputs}
+                  <button onclick="seatingAddTable('${view}','__judges__')" style="background:none;border:1px dashed var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:0.65rem;padding:2px 6px;margin:2px">+ table</button>
+                </td>
+              </tr>`;
+            })() : ''}
           </tbody>
           <tfoot><tr class="total-row">
             <td>TOTAL</td>
@@ -6011,7 +6027,11 @@ function printSeatingList(view) {
       isJudge: false,
       alt: i % 2 === 1
     })),
-    ...(isbanquet ? [{ studio: 'Judges &amp; Officials', tableStr: `#${judgesStart} &amp; #${judgesEnd}`, isJudge: true, alt: false }] : [])
+    ...(isbanquet ? (() => {
+      const jKey = getSeatingKey(view, '__judges__');
+      const jNums = (_seatingData[jKey] && _seatingData[jKey].tableNums.length) ? _seatingData[jKey].tableNums : [];
+      return jNums.length ? [{ studio: 'Judges &amp; Officials', tableStr: formatTables(jNums), isJudge: true, alt: false }] : [];
+    })() : [])
   ];
 
   // Fit into exactly 2 pages max — calculate cards per page dynamically
@@ -6043,17 +6063,65 @@ function printSeatingList(view) {
       .card.judge { background:#f5f0e8 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     }`;
 
-  const banquetCSS = weekendCSS
-    .replace('.studio { font-size:20pt', '.studio { font-size:20pt; font-style:italic')
-    .replace("color:#8B6914; line-height:1.1", "color:#5c3a00; line-height:1.1");
+  const banquetCSS = `
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#fff; font-family:'Playfair Display',Georgia,serif; }
+    .page {
+      width:8.5in; min-height:11in;
+      padding:0.5in 0.6in;
+      page-break-after:always;
+      display:flex; flex-direction:column;
+      background:#fff;
+      border:0.18in solid #5c3a00;
+      box-sizing:border-box;
+    }
+    .page:last-child { page-break-after:avoid; }
+    .header {
+      text-align:center;
+      margin-bottom:0.3in;
+      padding-bottom:0.2in;
+      border-bottom:2px solid #c9a84c;
+    }
+    .ornament { font-size:16pt; color:#c9a84c; letter-spacing:0.4em; margin-bottom:0.08in; }
+    .comp-name { font-family:'Great Vibes',cursive; font-size:52pt; color:#5c3a00; line-height:1.1; }
+    .sub { font-size:11pt; letter-spacing:0.3em; text-transform:uppercase; color:#8B6914; margin-top:6px; font-family:'Playfair Display',serif; font-weight:700; }
+    .rule { display:flex; align-items:center; gap:0.15in; margin-top:0.12in; }
+    .rule-line { flex:1; height:1px; background:linear-gradient(to right,transparent,#c9a84c,transparent); }
+    .rule-diamond { color:#c9a84c; font-size:10pt; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:0.13in; }
+    .card {
+      border:1px solid #d4b896;
+      border-radius:5px;
+      padding:0.16in 0.22in;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      background:#fdfaf4;
+    }
+    .card.alt { background:#fff8ef; }
+    .card.judge { background:#f5ede0; border:2px solid #c9a84c; }
+    .studio { font-size:17pt; font-weight:700; color:#2a1a0a; font-family:'Playfair Display',serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:3in; font-style:italic; }
+    .card.judge .studio { color:#5c3a00; }
+    .tables { font-size:22pt; font-weight:700; color:#8B6914; font-family:'Playfair Display',serif; white-space:nowrap; text-align:right; padding-left:0.1in; flex-shrink:0; }
+    .card.judge .tables { color:#c9a84c; }
+    .footer { margin-top:auto; padding-top:0.15in; text-align:center; font-size:8pt; color:#c9a84c; letter-spacing:0.1em; text-transform:uppercase; border-top:1px solid #d4b896; }
+    @media print {
+      @page { size:letter portrait; margin:0; }
+      body { margin:0; }
+      .page { border:0.18in solid #5c3a00 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .card { background:#fdfaf4 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .card.alt { background:#fff8ef !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .card.judge { background:#f5ede0 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    }`;
 
   const css = isbanquet ? banquetCSS : weekendCSS;
 
   const banquetHeader = `
     <div class="header">
-      <div style="font-size:13pt;color:#c9a84c;letter-spacing:0.3em;margin-bottom:4px">✦ ✦ ✦</div>
-      <div class="comp-name" style="color:#5c3a00">${comp}</div>
-      <div style="font-size:10pt;letter-spacing:0.35em;text-transform:uppercase;color:#8B6914;margin-top:5px;font-family:'Cormorant Garamond',serif">Saturday Banquet Seating</div>
+      <div class="ornament">✦ ✦ ✦</div>
+      <div class="comp-name">${comp}</div>
+      <div class="sub">Saturday Banquet Seating</div>
+      <div class="rule"><div class="rule-line"></div><div class="rule-diamond">◆</div><div class="rule-line"></div></div>
     </div>`;
 
   const weekendHeader = `<div class="header"><div class="comp-name">${comp}</div><div style="font-size:11pt;letter-spacing:0.3em;text-transform:uppercase;color:#aaa;font-family:'Cormorant Garamond',serif;margin-top:5px">Competition Seating Chart</div></div>`;
@@ -6078,7 +6146,7 @@ function printSeatingList(view) {
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head>
   <title>${comp} Seating</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Great+Vibes&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Great+Vibes&family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap" rel="stylesheet">
   <style>${css}</style>
 </head><body>
   ${pagesHTML}
