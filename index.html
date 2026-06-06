@@ -6101,12 +6101,12 @@ function printSeatingList(view) {
       border-bottom:2px solid #c9a84c;
       flex-shrink:0;
     }
-    .ornament { font-size:14pt; color:#c9a84c; letter-spacing:0.4em; margin-bottom:0.06in; }
-    .comp-name { font-family:'Great Vibes',cursive; font-size:48pt; color:#5c3a00; line-height:1.1; }
-    .sub { font-size:10pt; letter-spacing:0.3em; text-transform:uppercase; color:#8B6914; margin-top:5px; font-family:'Playfair Display',serif; font-weight:700; }
+    .ornament { font-size:14pt; color:#333; letter-spacing:0.4em; margin-bottom:0.06in; }
+    .comp-name { font-family:'Great Vibes',cursive; font-size:48pt; color:#000; line-height:1.1; }
+    .sub { font-size:10pt; letter-spacing:0.3em; text-transform:uppercase; color:#333; margin-top:5px; font-family:'Playfair Display',serif; font-weight:700; }
     .rule { display:flex; align-items:center; gap:0.15in; margin-top:0.1in; }
-    .rule-line { flex:1; height:1px; background:linear-gradient(to right,transparent,#c9a84c,transparent); }
-    .rule-diamond { color:#c9a84c; font-size:9pt; }
+    .rule-line { flex:1; height:1px; background:#555; }
+    .rule-diamond { color:#333; font-size:9pt; }
     .grid {
       display:grid;
       grid-template-columns:1fr 1fr;
@@ -6114,7 +6114,7 @@ function printSeatingList(view) {
       align-content:start;
     }
     .card {
-      border:1px solid #d4b896;
+      border:1.5px solid #888;
       border-radius:5px;
       padding:0.12in 0.2in;
       display:flex;
@@ -6125,11 +6125,11 @@ function printSeatingList(view) {
       flex-shrink:0;
     }
     .card.alt { background:#fff8ef; }
-    .card.judge { background:#f5ede0; border:2px solid #c9a84c; }
-    .studio { font-size:16pt; font-weight:700; color:#2a1a0a; font-family:'Playfair Display',serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:2.8in; font-style:italic; }
-    .card.judge .studio { color:#5c3a00; }
-    .tables { font-size:20pt; font-weight:700; color:#8B6914; font-family:'Playfair Display',serif; white-space:nowrap; text-align:right; padding-left:0.1in; flex-shrink:0; }
-    .card.judge .tables { color:#c9a84c; }
+    .card.judge { background:#f0f0f0; border:2.5px solid #000; }
+    .studio { font-size:16pt; font-weight:700; color:#000; font-family:'Playfair Display',serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:2.8in; font-style:italic; }
+    .card.judge .studio { color:#000; font-weight:900; }
+    .tables { font-size:20pt; font-weight:900; color:#000; font-family:'Playfair Display',serif; white-space:nowrap; text-align:right; padding-left:0.1in; flex-shrink:0; }
+    .card.judge .tables { color:#000; font-weight:900; font-size:22pt; }
     .footer { display:none; }
     @media print {
       @page { size:letter portrait; margin:0; }
