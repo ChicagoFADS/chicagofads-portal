@@ -6110,11 +6110,11 @@ function printSeatingList(view) {
     .rule { display:flex; align-items:center; gap:0.15in; margin-top:0.12in; }
     .rule-line { flex:1; height:1px; background:linear-gradient(to right,transparent,#c9a84c,transparent); }
     .rule-diamond { color:#c9a84c; font-size:10pt; }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:0.09in; flex:1; align-content:stretch; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:0.11in; align-content:start; }
     .card {
       border:1px solid #d4b896;
       border-radius:5px;
-      padding:0.11in 0.2in;
+      padding:0.13in 0.2in;
       display:flex;
       justify-content:space-between;
       align-items:center;
@@ -6126,7 +6126,7 @@ function printSeatingList(view) {
     .card.judge .studio { color:#5c3a00; }
     .tables { font-size:22pt; font-weight:700; color:#8B6914; font-family:'Playfair Display',serif; white-space:nowrap; text-align:right; padding-left:0.1in; flex-shrink:0; }
     .card.judge .tables { color:#c9a84c; }
-    .footer { margin-top:auto; padding-top:0.15in; text-align:center; font-size:8pt; color:#c9a84c; letter-spacing:0.1em; text-transform:uppercase; border-top:1px solid #d4b896; }
+    .footer { display:none; }
     @media print {
       @page { size:letter portrait; margin:0; }
       body { margin:0; }
@@ -6162,7 +6162,7 @@ function printSeatingList(view) {
     <div class="page">
       ${headerHTML}
       ${renderCards(cards)}
-      ${pi === pages.length-1 ? `<div class="footer">Fred Astaire Dance Studios Illinois &bull; ${judgesEnd} tables</div>` : ''}
+      
     </div>`).join('');
 
   const w = window.open('','_blank');
