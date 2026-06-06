@@ -6051,8 +6051,8 @@ function printSeatingList(view) {
     })() : [])
   ];
 
-  // Fit into exactly 2 pages max — calculate cards per page dynamically
-  const CARDS_PER_PAGE = Math.ceil(allCards.length / 2);
+  // Max 16 cards per page (8 rows × 2 cols) — safely within border
+  const CARDS_PER_PAGE = isbanquet ? 16 : Math.ceil(allCards.length / 2);
   const pages = [];
   for (let i = 0; i < allCards.length; i += CARDS_PER_PAGE) pages.push(allCards.slice(i, i + CARDS_PER_PAGE));
 
@@ -6084,14 +6084,18 @@ function printSeatingList(view) {
     * { margin:0; padding:0; box-sizing:border-box; }
     body { background:#fff; font-family:'Playfair Display',Georgia,serif; }
     .page {
-      width:8.5in; min-height:11in;
+      width:8.5in;
+      height:11in;
       padding:0.55in 0.65in;
       page-break-after:always;
-      display:flex; flex-direction:column;
+      page-break-inside:avoid;
+      display:flex;
+      flex-direction:column;
       background:#fff;
       outline:0.15in solid #5c3a00;
       outline-offset:-0.15in;
       box-sizing:border-box;
+      overflow:hidden;
     }
     .page:last-child { page-break-after:avoid; }
     .header {
@@ -6106,11 +6110,11 @@ function printSeatingList(view) {
     .rule { display:flex; align-items:center; gap:0.15in; margin-top:0.12in; }
     .rule-line { flex:1; height:1px; background:linear-gradient(to right,transparent,#c9a84c,transparent); }
     .rule-diamond { color:#c9a84c; font-size:10pt; }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:0.13in; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:0.09in; }
     .card {
       border:1px solid #d4b896;
       border-radius:5px;
-      padding:0.16in 0.22in;
+      padding:0.11in 0.2in;
       display:flex;
       justify-content:space-between;
       align-items:center;
