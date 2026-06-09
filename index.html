@@ -1329,8 +1329,7 @@ function switchTab(name) {
   if (btn) btn.classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'summary')    renderStudioSummary();
-  if (name === 'documents')  renderStudioDocs();
-  if (name === 'danceentries') {
+  if (name === 'documents')  renderStudioDocs();  if (name === 'danceentries') {
     const d = getStudioData(currentStudio, currentComp);
     renderDanceEntries(d);
   }
@@ -2415,6 +2414,31 @@ function renderStudioSummary() {
         <div style="font-size:0.62rem;color:var(--muted);margin-top:0.75rem">Includes both VIP (${vipCount}) and ALC Saturday Banquet selections</div>
       </div>
     </div>
+
+    ${(d.danceEntries && d.danceEntries.length) ? `
+    <div class="section-card fade-up" style="animation-delay:0.2s">
+      <div class="section-header"><div class="section-title">💃 Dance Entries</div></div>
+      <div class="section-body">
+        <div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.5rem">
+          ${d.danceEntries.length} entries · ${d.danceEntries.reduce((s,e)=>s+(e.dances||[]).length,0)} individual dances
+        </div>
+        <table class="data-table">
+          <thead><tr>
+            <th>Student</th><th>Teacher</th><th>Style</th><th>Level</th><th>Age</th><th>Dances</th>
+          </tr></thead>
+          <tbody>
+            ${d.danceEntries.map(e => `<tr>
+              <td style="font-weight:600">${e.student||'—'}</td>
+              <td>${e.teacher||'—'}</td>
+              <td style="font-size:0.68rem">${e.style||'—'}</td>
+              <td style="font-size:0.68rem">Lv ${e.level||'—'}</td>
+              <td style="font-size:0.68rem">${e.ageCat||'—'}</td>
+              <td style="font-size:0.68rem;color:var(--gold)">${(e.dances||[]).join(', ')||'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
   `;
 }
 
@@ -7708,6 +7732,9 @@ function removeDanceEntry(idx) {
   d.danceEntries.splice(idx, 1);
   renderDanceEntries(d);
   triggerAutoSave();
+  // refresh summary if visible
+  const summaryTab = document.getElementById('tab-summary');
+  if (summaryTab && summaryTab.classList.contains('active')) renderStudioSummary();
 }
 
 // ─── STUDIO QUICK OPEN & COMPLETION ───
