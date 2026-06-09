@@ -1343,6 +1343,7 @@ function switchTab(name) {
   }
   if (name === 'compentries') {
     const d = getStudioData(currentStudio, currentComp);
+    syncDanceEntriesToCompEntries(d);
     renderCompEntriesTable(d.compEntries);
     initEntryMode();
   }
@@ -1906,6 +1907,28 @@ const COMP_DIVISIONS = [
 function getDivisionsForComp(comp) {
   if (comp === 'Chicago Open 2026') return COMP_DIVISIONS.filter(d => !d.excludeChicagoOpen);
   return COMP_DIVISIONS;
+}
+
+function syncDanceEntriesToCompEntries(d) {
+  if (!d.danceEntries || !d.danceEntries.length) return;
+  if (!d.compEntries) d.compEntries = [];
+
+  // Count individual dances per person type
+  let vipDances = 0, alcDances = 0;
+  d.danceEntries.forEach(e => {
+    if (!e.student || !e.dances || !e.dances.length) return;
+    // Find if student is VIP or ALC
+    const ticket = (d.tickets || []).find(t => t.name && t.name.trim().toLowerCase() === e.student.trim().toLowerCase());
+    const isVIP = (ticket && ticket.vipAlc === 'VIP') || d.vip.find(v => v.name && v.name.trim().toLowerCase() === e.student.trim().toLowerCase());
+    if (isVIP) vipDances += e.dances.length;
+    else alcDances += e.dances.length;
+  });
+
+  // Put them in the first division (Pro/Am Amateur — Single Dance)
+  const idx = 0;
+  if (!d.compEntries[idx]) d.compEntries[idx] = {};
+  if (vipDances > 0) d.compEntries[idx].vipQty = vipDances;
+  if (alcDances > 0) d.compEntries[idx].alcQty = alcDances;
 }
 
 function renderCompEntriesTable(saved) {
@@ -7700,8 +7723,9 @@ function updateDanceEntry(idx, field, val) {
   if (!d.danceEntries[idx]) return;
   d.danceEntries[idx][field] = val;
   if (field === 'style') d.danceEntries[idx].dances = [];
-  d._expandedEntry = idx; // keep expanded while editing
+  d._expandedEntry = idx;
   renderDanceEntries(d);
+  syncDanceEntriesToCompEntries(d);
   triggerAutoSave();
 }
 
@@ -7724,6 +7748,7 @@ function toggleDanceDance(idx, dance) {
     entry.dances.push(dance);
   }
   renderDanceEntries(d);
+  syncDanceEntriesToCompEntries(d);
   triggerAutoSave();
 }
 
