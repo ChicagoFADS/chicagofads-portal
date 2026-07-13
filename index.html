@@ -401,6 +401,21 @@
   }
   .people-table tr:hover td { background:#fdfbf5; }
   .people-table tr.vip-locked td { background:#fffbf0; }
+  .people-table tr.needs-review td { background:#fff0ed; }
+  .people-table tr.needs-review:hover td { background:#ffe6e0; }
+  .review-dot {
+    position:absolute; left:2px; top:50%; transform:translateY(-50%);
+    color:#d9534f; font-size:0.65rem; cursor:pointer; line-height:1;
+    animation: pulse-dot 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  .p-ack {
+    background:#fff; border:1.5px solid #27ae60; color:#27ae60;
+    border-radius:4px; width:20px; height:20px; cursor:pointer;
+    font-size:0.7rem; font-weight:700; line-height:1; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .p-ack:hover { background:#27ae60; color:#fff; }
   .people-table input[type="text"] {
     font-size:0.72rem; border:none; background:transparent;
     padding:3px 5px; color:#1a1a1a; width:100%; font-family:inherit;
@@ -1009,7 +1024,7 @@
 
     <div class="comp-bar">
       <label style="margin:0">Competition:</label>
-      <select id="orgCompSelect" onchange="renderOrgDashboard()" style="max-width:280px"></select>
+      <select id="orgCompSelect" onchange="onOrgCompChange()" style="max-width:280px"></select>
     </div>
 
     <div class="tab-content active" id="org-tab-overview">
@@ -1088,10 +1103,19 @@
 let appState = {
   studios: [],
   competitions: [],
+  activeComp: null, // the "current" competition — defaults everywhere until changed
   credentials: {},
   visitingStudios: [], // [{name, comp}] - visiting studios for specific comps
   data: {} // keyed: studioName + '::' + compName
 };
+
+function getActiveComp() {
+  // Use the admin-selected active comp if set and still valid, otherwise fall back to first comp
+  if (appState.activeComp && appState.competitions.includes(appState.activeComp)) {
+    return appState.activeComp;
+  }
+  return getActiveComp();
+}
 
 let currentUser = null; // { type: 'studio'|'organizer', studio: name }
 let currentStudio = null;
@@ -1111,6 +1135,7 @@ const DEFAULT_COMPETITIONS = [
 // ── FIREBASE HELPERS ──
 async function fbGet(key) {
   try {
+    if (!window._fbDoc || !window._db) throw new Error('Firebase not ready');
     const ref = window._fbDoc(window._db, 'hub', key);
     const snap = await window._fbGetDoc(ref);
     return snap.exists() ? snap.data().value : null;
@@ -1119,6 +1144,7 @@ async function fbGet(key) {
 
 async function fbSet(key, value) {
   try {
+    if (!window._fbDoc || !window._db) throw new Error('Firebase not ready');
     const ref = window._fbDoc(window._db, 'hub', key);
     const strValue = typeof value === 'string' ? value : JSON.stringify(value);
     await window._fbSetDoc(ref, { value: strValue });
@@ -1140,7 +1166,6 @@ async function loadState() {
     const val = await fbGet('appState');
     if (val) {
       const saved = JSON.parse(val);
-      // Don't overwrite data from saved state — load separately
       const { data: _ignore, ...rest } = saved;
       appState = { ...appState, ...rest };
     }
@@ -1156,26 +1181,18 @@ async function loadState() {
     if (!appState.credentials[s]) appState.credentials[s] = s.toLowerCase().replace(/\s/g,'').replace(/\./g,'') + '1234';
   });
   if (!appState.visitingStudios) appState.visitingStudios = [];
-  // Remove any core studios that accidentally got added to visitingStudios
   appState.visitingStudios = appState.visitingStudios.filter(v => !appState.studios.includes(v.name));
   if (!appState.data) appState.data = {};
 
-  // Load each studio's data separately from Firebase — always get freshest copy
-  const allCombos = [];
-  appState.studios.forEach(s => appState.competitions.forEach(c => allCombos.push(s + '::' + c)));
-  appState.visitingStudios.forEach(v => { if(!allCombos.includes(v.name+'::'+v.comp)) allCombos.push(v.name+'::'+v.comp); });
-  for (const key of allCombos) {
-    try {
-      const val = await fbGet('studioData::' + key);
-      if (val) appState.data[key] = JSON.parse(val); // always overwrite with Firebase value
-    } catch(e) {}
-  }
+  // ── LAZY LOADING: don't load studio data here ──
+  // Studio data is loaded on-demand via ensureStudioLoaded()
+  // This saves ~100 Firebase reads on every page load
+
   _isLoading = false;
   await loadSeatingData();
-
   populateLoginDropdown();
 
-  // Restore login session AFTER all Firebase data is loaded
+  // Restore login session
   try {
     const saved = localStorage.getItem('currentUser');
     if (saved) {
@@ -1184,18 +1201,40 @@ async function loadState() {
       document.getElementById('appHeader').style.display = 'flex';
       document.getElementById('appMain').style.display = 'block';
       document.getElementById('headerName').textContent = currentUser.name;
-      // Small delay to ensure all Firebase reads are truly complete
-      setTimeout(() => {
+      setTimeout(async () => {
         if (currentUser.type === 'organizer') {
           showOrganizerView();
-          // Force a fresh overview render after a beat to ensure all data loaded
-          setTimeout(() => renderOverview(), 500);
+          setTimeout(() => renderOverview(), 300);
         } else {
+          // Studio login: only load THIS studio's data for active comp
+          await ensureStudioLoaded(currentUser.name, getActiveComp());
           showStudioView(currentUser.name);
         }
       }, 100);
     }
   } catch(e) { console.error('Session restore error:', e); }
+}
+
+// Track which studio::comp combos have been loaded
+const _loadedKeys = new Set();
+
+async function ensureStudioLoaded(studio, comp) {
+  const key = studio + '::' + comp;
+  if (_loadedKeys.has(key)) return; // already loaded this session
+  try {
+    const val = await fbGet('studioData::' + key);
+    if (val) appState.data[key] = JSON.parse(val);
+    _loadedKeys.add(key);
+  } catch(e) { console.error('ensureStudioLoaded error', key, e); }
+}
+
+async function ensureAllStudiosLoaded(comp) {
+  // Load all studios for a given comp — used by organizer overview/meal totals etc.
+  const allStudios = getAllStudiosForComp(comp);
+  const toLoad = allStudios.filter(s => !_loadedKeys.has(s + '::' + comp));
+  if (!toLoad.length) return;
+  // Load in parallel for speed
+  await Promise.all(toLoad.map(s => ensureStudioLoaded(s, comp)));
 }
 
 async function saveState() {
@@ -1204,6 +1243,7 @@ async function saveState() {
     const config = {
       studios: appState.studios,
       competitions: appState.competitions,
+      activeComp: appState.activeComp,
       credentials: appState.credentials,
       visitingStudios: appState.visitingStudios
     };
@@ -1356,12 +1396,21 @@ function switchOrgTab(name) {
   const btn = document.querySelector(`#organizerView .tab[onclick*="'${name}'"]`);
   if (btn) btn.classList.add('active');
   document.getElementById('org-tab-' + name).classList.add('active');
-  if (name === 'overview') renderOverview();
-  if (name === 'studios') renderStudiosTab();
+  if (name === 'overview') renderOverview(); // already has ensureAllStudiosLoaded inside
+  if (name === 'studios') {
+    const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
+    ensureAllStudiosLoaded(comp).then(() => renderStudiosTab());
+  }
   if (name === 'visiting') renderVisitingTab();
-  if (name === 'meals') renderMealsTab();
+  if (name === 'meals') {
+    const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
+    ensureAllStudiosLoaded(comp).then(() => renderMealsTab());
+  }
   if (name === 'documents') renderOrgDocuments();
-  if (name === 'compare') renderCompareTab();
+  if (name === 'compare') {
+    const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
+    ensureAllStudiosLoaded(comp).then(() => renderCompareTab());
+  }
   if (name === 'admin') { renderAdminTab(); renderPaymentsTable(); }
   if (name === 'checks') renderChecksTab();
   if (name === 'setup') renderSetupTab();
@@ -1385,6 +1434,11 @@ function switchOrgTab(name) {
 // ═══════════════════════════════════════════════════════
 
 function getDefaultComp() {
+  // Admin-set active comp always wins if set
+  if (appState.activeComp && appState.competitions.includes(appState.activeComp)) {
+    return appState.activeComp;
+  }
+  // Fallback: guess by month
   const month = new Date().getMonth() + 1; // 1-12
   if (month >= 1  && month <= 3)  return 'Freddy Ball 2026';
   if (month >= 4  && month <= 6)  return 'Chicago Open 2026';
@@ -1399,7 +1453,8 @@ function setCompDropdown(sel) {
   if (match) sel.value = preferred;
 }
 
-function showStudioView(studioName) {
+async function showStudioView(studioName) {
+  await ensureStudioLoaded(studioName, getActiveComp());
   document.getElementById('studioView').style.display = 'block';
   document.getElementById('organizerView').style.display = 'none';
   document.getElementById('studioTitle').textContent = studioName;
@@ -1419,7 +1474,7 @@ function showStudioView(studioName) {
   loadStudioData();
 }
 
-function openOrgStudioEditor() {
+async function openOrgStudioEditor() {
   const studio = document.getElementById('manageStudioSelect').value;
   if (!studio) return;
   // Show studioView with back button visible
@@ -1438,7 +1493,19 @@ function openOrgStudioEditor() {
 
   currentStudio = studio;
   currentComp = sel.value;
+  await ensureStudioLoaded(studio, currentComp);
   loadStudioData();
+
+  // Notify if this studio has unreviewed changes
+  setTimeout(() => {
+    const d = getStudioData(studio, currentComp);
+    const reviewCount = (d.tickets||[]).filter(t => t.needsReview).length;
+    if (reviewCount > 0) {
+      const plural = reviewCount === 1 ? 'entry' : 'entries';
+      const verb = reviewCount === 1 ? "hasn't" : "haven't";
+      showModal('🔴', 'New Additions / Changes', studio + ' has ' + reviewCount + ' new or changed ' + plural + ' that ' + verb + ' been entered into CompManager yet. Look for the red dot in the People tab — click the ✓ once you have keyed them in.');
+    }
+  }, 300);
 }
 
 function returnToOrganizerDashboard() {
@@ -1505,10 +1572,7 @@ function makeVipRow(i, r = {}) {
     </select></td>
     <td><select id="vipMeal${i}" onchange="updateRow('vip',${i},'meal',this.value)" style="${mealMissing?'outline:2px solid var(--red);border-radius:4px':''}">
       <option value="">— Choose —</option>
-      <option ${r.meal==='Beef'?'selected':''}>Beef</option>
-      <option ${r.meal==='Fish'?'selected':''}>Fish</option>
-      <option ${r.meal==='Chicken'?'selected':''}>Chicken</option>
-      <option ${r.meal==='Vegetarian'?'selected':''}>Vegetarian</option>
+      ${getMealOptions(r.meal, currentComp)}
       <option ${r.meal==='Kids Meal'?'selected':''}>Kids Meal</option>
     </select></td>
     <td><input type="text" value="${r.allergy||''}" placeholder="None" onchange="updateRow('vip',${i},'allergy',this.value)"/></td>
@@ -1545,6 +1609,21 @@ function calcTicketFee(r) {
 }
 
 // ── PEOPLE LIST (merged tickets + meals) ──
+// ── COMP-SPECIFIC MEAL CHOICES ──
+function getMealChoices(comp) {
+  const c = comp || currentComp || getActiveComp();
+  if (c && c.includes('DanceSport')) {
+    return ['Beef & Seafood', 'Vegetarian'];
+  }
+  return ['Beef', 'Fish', 'Chicken', 'Vegetarian'];
+}
+
+function getMealOptions(currentVal, comp) {
+  return getMealChoices(comp).map(m =>
+    `<option value="${m}" ${currentVal===m?'selected':''}>${m}</option>`
+  ).join('');
+}
+
 function renderPeopleList(d) {
   const el = document.getElementById('peopleList');
   if (!el) return;
@@ -1620,10 +1699,7 @@ function renderPeopleList(d) {
           <span class="chk-sep"></span>
           <select class="dinner-inline${!m.satMealChoice?' missing':''}" onchange="updatePersonMealChoice(${i},this.value)">
             <option value="">Dinner?</option>
-            <option ${m.satMealChoice==='Beef'?'selected':''}>Beef</option>
-            <option ${m.satMealChoice==='Fish'?'selected':''}>Fish</option>
-            <option ${m.satMealChoice==='Chicken'?'selected':''}>Chicken</option>
-            <option ${m.satMealChoice==='Vegetarian'?'selected':''}>Vegetarian</option>
+            ${getMealOptions(m.satMealChoice, currentComp)}
           </select>
           <input class="allergy-inline" type="text" value="${m.allergy||''}" placeholder="Allergy?" onchange="updatePersonAllergy(${i},this.value)"/>
         </div>`
@@ -1639,16 +1715,17 @@ function renderPeopleList(d) {
           ${m.satCocktail ? `<span class="chk-sep"></span>
             <select class="dinner-inline${mealMissing?' missing':''}" onchange="updatePersonMealChoice(${i},this.value)">
               <option value="">Dinner?</option>
-              <option ${m.satMealChoice==='Beef'?'selected':''}>Beef</option>
-              <option ${m.satMealChoice==='Fish'?'selected':''}>Fish</option>
-              <option ${m.satMealChoice==='Chicken'?'selected':''}>Chicken</option>
-              <option ${m.satMealChoice==='Vegetarian'?'selected':''}>Vegetarian</option>
+              ${getMealOptions(m.satMealChoice, currentComp)}
             </select>${mealMissing?'<span style="color:var(--red);font-size:0.6rem">⚠</span>':''}` : ''}
           <input class="allergy-inline" type="text" value="${m.allergy||''}" placeholder="Allergy?" onchange="updatePersonAllergy(${i},this.value)"/>
         </div>`;
 
-    return `<tr class="${isVIP?'vip-locked':''}">
-      <td style="min-width:130px"><input type="text" value="${t.name||''}" placeholder="Full name" onchange="updatePersonName(${i},this.value)"/></td>
+    const needsReview = !!t.needsReview;
+    return `<tr class="${isVIP?'vip-locked':''}${needsReview?' needs-review':''}">
+      <td style="min-width:130px;position:relative">
+        ${needsReview ? `<span class="review-dot" title="New or changed — click ✓ to mark reviewed" onclick="acknowledgeReview(${i})">●</span>` : ''}
+        <input type="text" value="${t.name||''}" placeholder="Full name" onchange="updatePersonName(${i},this.value)" style="${needsReview?'padding-left:14px':''}"/>
+      </td>
       <td>
         <select onchange="updatePersonTicket(${i},'proam',this.value)">
           <option value="">—</option>
@@ -1671,7 +1748,10 @@ function renderPeopleList(d) {
       <td>${sessionChks}</td>
       <td>${mealChks}</td>
       <td class="p-total" id="personTotal${i}">${isVIP?'<span class="price-tag">pkg</span>':'$'+total.toFixed(2)}</td>
-      <td><button class="p-remove" onclick="removePersonRow(${i})">✕</button></td>
+      <td style="display:flex;align-items:center;gap:4px">
+        ${needsReview ? `<button class="p-ack" onclick="acknowledgeReview(${i})" title="Mark reviewed / entered in CompManager">✓</button>` : ''}
+        <button class="p-remove" onclick="removePersonRow(${i})">✕</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -1689,10 +1769,25 @@ function renderPeopleList(d) {
   updatePeopleTotals(d);
 }
 
+function acknowledgeReview(i) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (d.tickets[i]) d.tickets[i].needsReview = false;
+  renderPeopleList(d);
+  triggerAutoSave();
+}
+
+function flagForReview(d, i) {
+  // Only flag when a studio user is making the change (not the organizer)
+  if (currentUser && currentUser.type === 'studio' && d.tickets[i]) {
+    d.tickets[i].needsReview = true;
+  }
+}
+
 function updatePersonName(i, val) {
   const d = getStudioData(currentStudio, currentComp);
   if (d.tickets[i]) d.tickets[i].name = val;
   if (d.meals[i])   d.meals[i].name   = val;
+  flagForReview(d, i);
   triggerAutoSave();
 }
 
@@ -1730,6 +1825,7 @@ function updatePersonTicket(i, field, val) {
     }
   }
 
+  flagForReview(d, i);
   refreshPersonCard(i, d);
   triggerAutoSave();
 }
@@ -1738,6 +1834,7 @@ function updatePersonMeal(i, field, val) {
   const d = getStudioData(currentStudio, currentComp);
   if (!d.meals[i]) d.meals[i] = {};
   d.meals[i][field] = val;
+  flagForReview(d, i);
   refreshPersonCard(i, d);
   triggerAutoSave();
 }
@@ -1746,6 +1843,7 @@ function updatePersonMealChoice(i, val) {
   const d = getStudioData(currentStudio, currentComp);
   if (!d.meals[i]) d.meals[i] = {};
   d.meals[i].satMealChoice = val;
+  flagForReview(d, i);
   checkMealChoice(i);
   updatePeopleTotals(d);
   triggerAutoSave();
@@ -1755,6 +1853,7 @@ function updatePersonAllergy(i, val) {
   const d = getStudioData(currentStudio, currentComp);
   if (!d.meals[i]) d.meals[i] = {};
   d.meals[i].allergy = val;
+  flagForReview(d, i);
   triggerAutoSave();
 }
 
@@ -1774,8 +1873,12 @@ function updatePeopleTotals(d) {
   if (el2) el2.textContent = '$'+mealTotal.toFixed(2);
   if (el3) el3.textContent = '$'+(ticketTotal+mealTotal).toFixed(2);
 
-  // Meat totals — VIPs use r.meal, ALC use r.satMealChoice
-  const meats = { Beef:0, Fish:0, Chicken:0, Vegetarian:0, Kids:0 };
+  // Meat totals — comp-specific choices
+  const choices = getMealChoices(currentComp);
+  const meats = {};
+  choices.forEach(c => meats[c] = 0);
+  meats.Kids = 0;
+
   (d.vip||[]).filter(r=>r.name).forEach(r => {
     if (r.meal && meats[r.meal] !== undefined) meats[r.meal]++;
   });
@@ -1793,17 +1896,26 @@ function updatePeopleTotals(d) {
   }).length;
 
   const setEl = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
-  setEl('meatBeef', meats.Beef);
-  setEl('meatFish', meats.Fish);
-  setEl('meatChicken', meats.Chicken);
-  setEl('meatVeg', meats.Vegetarian);
-  setEl('meatKids', meats.Kids);
-  setEl('meatTotal', total);
+  // Update the meat totals bar with dynamic labels
+  const meatBar = document.getElementById('peopleMeatTotals');
+  if (meatBar) {
+    const choiceItems = choices.map(c => `<span style="font-size:0.7rem">${c}: <strong>${meats[c]||0}</strong></span>`).join('');
+    const totalDiners = vipCount + (d.meals||[]).filter(r => {
+      const t = (d.tickets||[]).find(t=>t.name===r.name);
+      return !(t&&t.vipAlc==='VIP') && r.satCocktail;
+    }).length;
+    meatBar.innerHTML = `
+      <strong style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em">Sat Banquet</strong>
+      ${choiceItems}
+      <span style="font-size:0.7rem">👶 Kids: <strong>${meats.Kids||0}</strong></span>
+      <span style="margin-left:auto;font-size:0.72rem;color:var(--gold);font-weight:700">Total: <strong>${totalDiners}</strong> dinner guests</span>`;
+  }
 }
 
 function addPersonRow() {
   const d = getStudioData(currentStudio, currentComp);
-  d.tickets.push({ name:'', proam:'', vipAlc:'ALC', firstTimer:false, compFee:false, thuMat:false, thuEve:false, friMat:false, friEve:false, satMat:false, gift:false });
+  const isStudioAdd = currentUser && currentUser.type === 'studio';
+  d.tickets.push({ name:'', proam:'', vipAlc:'ALC', firstTimer:false, compFee:false, thuMat:false, thuEve:false, friMat:false, friEve:false, satMat:false, gift:false, needsReview:isStudioAdd });
   d.meals.push({   name:'', proam:'', thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false });
   renderPeopleList(d);
   triggerAutoSave();
@@ -1824,64 +1936,6 @@ function removePersonRow(i) {
   d.meals.splice(i, 1);
   renderPeopleList(d);
   triggerAutoSave();
-}
-
-function renderTicketsTable(rows) {
-  const tbody = document.getElementById('ticketsBody');
-  tbody.innerHTML = '';
-  rows.forEach((r, i) => tbody.appendChild(makeTicketRow(i, r)));
-  updateTicketsTotal();
-}
-
-function makeTicketRow(i, r = {}) {
-  const tr = document.createElement('tr');
-  const fee = calcTicketFee(r);
-  const chk = (val) => val ? 'checked' : '';
-  tr.innerHTML = `
-    <td class="row-num">${i+1}</td>
-    <td><input type="text" value="${r.name||''}" placeholder="Full name" onchange="updateRow('tickets',${i},'name',this.value)"/></td>
-    <td><select onchange="updateRow('tickets',${i},'proam',this.value)">
-      <option value="">—</option>
-      <option value="Amateur" ${r.proam==='Amateur'?'selected':''}>Am</option>
-      <option value="Professional" ${r.proam==='Professional'?'selected':''}>Pro</option>
-    </select></td>
-    <td><input type="checkbox" ${chk(r.firstTimer)} onchange="updateRow('tickets',${i},'firstTimer',this.checked)"/></td>
-    <td><input type="checkbox" ${chk(r.compFee)} onchange="updateRow('tickets',${i},'compFee',this.checked);refreshTicketRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.thuMat)} onchange="updateRow('tickets',${i},'thuMat',this.checked);refreshTicketRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.thuEve)} onchange="updateRow('tickets',${i},'thuEve',this.checked);refreshTicketRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.friMat)} onchange="updateRow('tickets',${i},'friMat',this.checked);refreshTicketRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.friEve)} onchange="updateRow('tickets',${i},'friEve',this.checked);refreshTicketRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.satMat)} onchange="updateRow('tickets',${i},'satMat',this.checked);refreshTicketRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.gift)} onchange="updateRow('tickets',${i},'gift',this.checked);refreshTicketRow(${i})"/></td>
-    <td><select onchange="updateRow('tickets',${i},'vipAlc',this.value)">
-      <option value="">—</option>
-      <option ${r.vipAlc==='VIP'?'selected':''}>VIP</option>
-      <option ${r.vipAlc==='ALC'?'selected':''}>ALC</option>
-    </select></td>
-    <td id="ticketFee${i}" style="color:var(--gold-light)">$${fee.toFixed(2)}</td>
-    <td><button class="btn btn-sm btn-danger" onclick="removeRow('tickets',${i})">✕</button></td>
-  `;
-  return tr;
-}
-
-function refreshTicketRow(i) {
-  const d = getStudioData(currentStudio, currentComp);
-  const fee = calcTicketFee(d.tickets[i]);
-  const el = document.getElementById('ticketFee' + i);
-  if (el) el.textContent = '$' + fee.toFixed(2);
-  updateTicketsTotal();
-}
-
-function updateTicketsTotal() {
-  const d = getStudioData(currentStudio, currentComp);
-  const total = d.tickets.reduce((s, r) => s + calcTicketFee(r), 0);
-  document.getElementById('ticketsTotalVal').textContent = '$' + total.toFixed(2);
-}
-
-function addTicketRow() {
-  const d = getStudioData(currentStudio, currentComp);
-  d.tickets.push({});
-  renderTicketsTable(d.tickets);
 }
 
 // ── COMPETITION ENTRIES (by division) ──
@@ -2014,49 +2068,6 @@ function calcAlcMealRevenue(d) {
 }
 
 
-function renderMealsTable(rows) {
-  const tbody = document.getElementById('mealsBody');
-  tbody.innerHTML = '';
-  rows.forEach((r, i) => tbody.appendChild(makeMealRow(i, r)));
-  updateMealsTotal();
-}
-
-function makeMealRow(i, r = {}) {
-  const tr = document.createElement('tr');
-  const fee = calcMealFee(r);
-  const chk = (val) => val ? 'checked' : '';
-  const mealMissing = r.satCocktail && !r.childrenMeal && !r.satMealChoice;
-  tr.innerHTML = `
-    <td class="row-num">${i+1}</td>
-    <td><input type="text" value="${r.name||''}" placeholder="Full name" onchange="updateRow('meals',${i},'name',this.value)"/></td>
-    <td><select onchange="updateRow('meals',${i},'proam',this.value)">
-      <option value="">—</option>
-      <option value="Amateur" ${r.proam==='Amateur'?'selected':''}>Am</option>
-      <option value="Professional" ${r.proam==='Professional'?'selected':''}>Pro</option>
-    </select></td>
-    <td><input type="checkbox" ${chk(r.thuDinner)} onchange="updateRow('meals',${i},'thuDinner',this.checked);refreshMealRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.friBrk)} onchange="updateRow('meals',${i},'friBrk',this.checked);refreshMealRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.friLunch)} onchange="updateRow('meals',${i},'friLunch',this.checked);refreshMealRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.friDinner)} onchange="updateRow('meals',${i},'friDinner',this.checked);refreshMealRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.satBrk)} onchange="updateRow('meals',${i},'satBrk',this.checked);refreshMealRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.satLunch)} onchange="updateRow('meals',${i},'satLunch',this.checked);refreshMealRow(${i})"/></td>
-    <td><input type="checkbox" ${chk(r.satCocktail)} onchange="updateRow('meals',${i},'satCocktail',this.checked);refreshMealRow(${i});checkMealChoice(${i})"/></td>
-    <td><select id="mealChoice${i}" onchange="updateRow('meals',${i},'satMealChoice',this.value);checkMealChoice(${i})"
-        style="${mealMissing?'outline:2px solid var(--red);border-radius:4px':''}">
-      <option value="">— Choose —</option>
-      <option ${r.satMealChoice==='Beef'?'selected':''}>Beef</option>
-      <option ${r.satMealChoice==='Fish'?'selected':''}>Fish</option>
-      <option ${r.satMealChoice==='Chicken'?'selected':''}>Chicken</option>
-      <option ${r.satMealChoice==='Vegetarian'?'selected':''}>Vegetarian</option>
-    </select>${mealMissing?`<span style="color:var(--red);font-size:0.6rem;display:block;margin-top:2px">⚠ needed</span>`:''}</td>
-    <td style="text-align:center"><input type="checkbox" title="Age 12 &amp; under — $45" ${chk(r.childrenMeal)} onchange="updateRow('meals',${i},'childrenMeal',this.checked);refreshMealRow(${i});checkMealChoice(${i})"/></td>
-    <td><input type="text" value="${r.allergy||''}" placeholder="None" onchange="updateRow('meals',${i},'allergy',this.value)"/></td>
-    <td id="mealFee${i}" style="color:${r.childrenMeal?'#e8c97a':'var(--gold-light)'}">$${fee.toFixed(2)}</td>
-    <td><button class="btn btn-sm btn-danger" onclick="removeRow('meals',${i})">✕</button></td>
-  `;
-  return tr;
-}
-
 function checkMealChoice(i) {
   const d = getStudioData(currentStudio, currentComp);
   const r = d.meals[i] || {};
@@ -2079,26 +2090,6 @@ function checkMealChoice(i) {
       if (warn && warn.classList.contains('meal-warn')) warn.remove();
     }
   }
-}
-
-function refreshMealRow(i) {
-  const d = getStudioData(currentStudio, currentComp);
-  const fee = calcMealFee(d.meals[i]);
-  const el = document.getElementById('mealFee' + i);
-  if (el) el.textContent = '$' + fee.toFixed(2);
-  updateMealsTotal();
-}
-
-function updateMealsTotal() {
-  const d = getStudioData(currentStudio, currentComp);
-  const total = calcAlcMealRevenue(d);
-  document.getElementById('mealsTotalVal').textContent = '$' + total.toFixed(2);
-}
-
-function addMealRow() {
-  const d = getStudioData(currentStudio, currentComp);
-  d.meals.push({});
-  renderMealsTable(d.meals);
 }
 
 // ── GENERIC ROW UPDATER ──
@@ -2338,7 +2329,9 @@ function renderStudioSummary() {
   const totalGifts = alcGifts + vipCount;
 
   // Saturday dinner choices — VIP + ALC combined (kitchen needs total)
-  const dinnerChoices = {Beef:0, Fish:0, Chicken:0, Vegetarian:0, 'Kids Meal':0};
+  const comp = document.getElementById('studioCompSelect')?.value || currentComp;
+  const _choices = getMealChoices(comp);
+  const dinnerChoices = {}; _choices.forEach(c=>dinnerChoices[c]=0); dinnerChoices['Kids Meal']=0;
   d.vip.forEach(r => { if(r.meal && dinnerChoices[r.meal]!==undefined) dinnerChoices[r.meal]++; });
   d.meals.filter(r=>r.satCocktail).forEach(r => {
     if (r.childrenMeal) dinnerChoices['Kids Meal']++;
@@ -2469,6 +2462,11 @@ function renderStudioSummary() {
 // ORGANIZER VIEW
 // ═══════════════════════════════════════════════════════
 
+function onOrgCompChange() {
+  // Don't clear keys for other comps — just re-render which will load the new comp on demand
+  renderOrgDashboard();
+}
+
 function showOrganizerView() {
   document.getElementById('studioView').style.display = 'none';
   document.getElementById('organizerView').style.display = 'block';
@@ -2519,13 +2517,16 @@ function getCompData(comp) {
     const sessions={thuMat:0,thuEve:0,friMat:0,friEve:0,satMat:0};
     d.tickets.forEach(r=>Object.keys(sessions).forEach(k=>{if(r[k])sessions[k]++;}));
 
+    const reviewCount = d.tickets.filter(r => r.needsReview).length;
+
     return { studio:s, vipCount, vipRev, ticketRev, entryRev, mealRev, ticketHolders, mealPkgs:totalMealPkgs,
-             welcomeGifts, totalEntries, mealCounts, sessions, total: vipRev+ticketRev+entryRev+mealRev };
+             welcomeGifts, totalEntries, mealCounts, sessions, total: vipRev+ticketRev+entryRev+mealRev, reviewCount };
   });
 }
 
 async function renderOverview() {
   const comp = document.getElementById('orgCompSelect').value;
+  await ensureAllStudiosLoaded(comp);
   const data = getCompData(comp);
 
   for (const d of data) {
@@ -2547,7 +2548,9 @@ async function renderOverview() {
   const totalBalance   = data.reduce((s,d)=>s+d.balance,0);
 
   // Saturday dinner choices across ALL studios (VIP + ALC)
-  const dc = {Beef:0, Fish:0, Chicken:0, Vegetarian:0, 'Kids Meal':0};
+  const _orgComp = document.getElementById('orgCompSelect')?.value || getActiveComp();
+  const _dcChoices = getMealChoices(_orgComp);
+  const dc = {}; _dcChoices.forEach(c=>dc[c]=0); dc['Kids Meal']=0;
   getAllStudiosForComp(comp).forEach(s => {
     const d = getStudioData(s, comp);
     d.vip.forEach(r => { if(r.meal && dc[r.meal]!==undefined) dc[r.meal]++; });
@@ -2742,7 +2745,7 @@ function renderStudiosTab() {
     ${data.map(d=>`
     <div class="studio-card" style="cursor:pointer;${isStudioComplete(d.studio,comp)?'border:2px solid #27ae60;background:#f0fff4;':''}" onclick="quickOpenStudio('${d.studio}')" title="Click to edit ${d.studio}">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
-        <div class="studio-card-name" style="margin-bottom:0">${d.studio}</div>
+        <div class="studio-card-name" style="margin-bottom:0">${d.studio}${d.reviewCount?` <span style="background:#d9534f;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">${d.reviewCount} new</span>`:''}</div>
         <label onclick="toggleStudioComplete('${d.studio}','${comp}',event)" title="${isStudioComplete(d.studio,comp)?'Mark incomplete':'Mark complete'}" style="display:flex;align-items:center;gap:4px;font-size:0.65rem;cursor:pointer;color:${isStudioComplete(d.studio,comp)?'#27ae60':'var(--muted)'}">
           <input type="checkbox" ${isStudioComplete(d.studio,comp)?'checked':''} style="accent-color:#27ae60;width:14px;height:14px" onclick="event.stopPropagation()"/>
           Done
@@ -2791,7 +2794,9 @@ function renderMealsTab() {
   let totalKids = 0;
 
   const sessionTotals = {thuMat:0,thuEve:0,friMat:0,friEve:0,satMat:0};
-  const dinnerChoiceTotals = {Beef:0,Fish:0,Chicken:0,Vegetarian:0,'Kids Meal':0};
+  const _mtComp = document.getElementById('orgCompSelect')?.value || getActiveComp();
+  const _mtChoices = getMealChoices(_mtComp);
+  const dinnerChoiceTotals = {}; _mtChoices.forEach(c=>dinnerChoiceTotals[c]=0); dinnerChoiceTotals['Kids Meal']=0;
 
   const studioRows = allStudios.map(s => {
     const d = getStudioData(s, comp);
@@ -2934,7 +2939,8 @@ function renderCompareTab() {
   });
 
   // Sat banquet dinner choice breakdown per competition
-  const choiceKeys = ['Beef','Fish','Chicken','Vegetarian'];
+  const _cpComp = document.getElementById('orgCompSelect')?.value || getActiveComp();
+  const choiceKeys = getMealChoices(_cpComp);
   const choiceRows = choiceKeys.map(choice => {
     const counts = comps.map(c => {
       const allStudios = getAllStudiosForComp(c);
@@ -3015,6 +3021,15 @@ function renderCompareTab() {
 
 // ── ADMIN ──
 
+function setActiveComp() {
+  const sel = document.getElementById('activeCompSelect');
+  if (!sel) return;
+  appState.activeComp = sel.value;
+  triggerAutoSave();
+  renderAdminTab();
+  showModal('🎯', 'Active Competition Set', `${sel.value} is now the default competition for all logins. Studios and organizer view will open directly to this event.`);
+}
+
 function renderAdminTab() {
   const el = document.getElementById('adminContent');
 
@@ -3052,6 +3067,24 @@ function renderAdminTab() {
   ];
 
   el.innerHTML = `
+    <div class="section-card" style="margin-bottom:1.5rem;border-top:3px solid var(--gold);background:#fffbf0">
+      <div class="section-header">
+        <div class="section-title">🎯 Active Competition</div>
+        <span class="badge badge-gold">Controls default everywhere</span>
+      </div>
+      <div class="section-body">
+        <p style="font-size:0.7rem;color:var(--muted);margin-bottom:0.75rem;line-height:1.6">
+          This is the competition that automatically opens for organizer and studio logins. Switch this the moment one comp ends and the next one begins, so nobody accidentally enters data into the wrong event.
+        </p>
+        <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap">
+          <select id="activeCompSelect" style="max-width:280px">
+            ${appState.competitions.map(c => `<option value="${c}" ${c===appState.activeComp?'selected':''}>${c}</option>`).join('')}
+          </select>
+          <button class="btn btn-sm" style="width:auto;margin:0;background:var(--gold);color:var(--black)" onclick="setActiveComp()">Set as Active</button>
+          <span style="font-size:0.72rem;color:var(--muted)">Currently active: <strong style="color:var(--gold)">${appState.activeComp || getDefaultComp() + ' (auto by month)'}</strong></span>
+        </div>
+      </div>
+    </div>
     <div class="section-card" style="margin-bottom:1.5rem;border-top:3px solid var(--gold)">
       <div class="section-header">
         <div class="section-title">📋 Quick Status Summary</div>
@@ -3706,7 +3739,8 @@ function generateRegistrationPDF(studio, comp) {
     ['Kids', d.meals.filter(r=>r.childrenMeal).length],
   ];
 
-  const dc = {Beef:0,Fish:0,Chicken:0,Vegetarian:0,Kids:0};
+  const _pdfChoices = getMealChoices(currentComp);
+  const dc = {}; _pdfChoices.forEach(c=>dc[c]=0); dc.Kids=0;
   d.vip.forEach(r=>{ if(r.meal){ if(r.meal==='Kids Meal') dc.Kids++; else if(dc[r.meal]!==undefined) dc[r.meal]++; }});
   d.meals.filter(r=>r.satCocktail).forEach(r=>{ if(r.childrenMeal) dc.Kids++; else if(r.satMealChoice&&dc[r.satMealChoice]!==undefined) dc[r.satMealChoice]++; });
 
@@ -4079,7 +4113,7 @@ function doPrintDinnerLabels(labels) {
       if (!l) return `<div class="label"></div>`;
       const len = l.name.length;
       const nc = len > 26 ? 'xlong' : len > 20 ? 'long' : len > 14 ? 'medium' : 'short';
-      const mealIcons = { 'Beef':'🐄', 'Fish':'🐟', 'Chicken':'🐔', 'Vegetarian':'🥕', 'Kids Meal':'👶' };
+      const mealIcons = { 'Beef':'🐄', 'Fish':'🐟', 'Chicken':'🐔', 'Vegetarian':'🥕', 'Kids Meal':'👶', 'Beef & Seafood':'🥩', 'Kids':'👶' };
       const icon = mealIcons[l.meal] || '';
       return `<div class="label">
         <img class="logo" src="${LOGO_DATA_URL}" alt=""/>
@@ -5921,7 +5955,7 @@ function buildSeatingAssignments(view, comp) {
 
 function renderSeatingList(view) {
   const el = document.getElementById('seatingListContent');
-  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
   const assignments = buildSeatingAssignments(view, comp);
   const allUsedNums = assignments.flatMap(a => a.tableNums);
   const maxNum = allUsedNums.length ? Math.max(...allUsedNums) : 0;
@@ -6013,7 +6047,7 @@ function renderSeatingList(view) {
 }
 
 function seatingSetNum(view, studio, tableIdx, newNum) {
-  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
   const key = getSeatingKey(view, studio);
   if (!_seatingData[key]) {
     const a = buildSeatingAssignments(view, comp).find(x => x.studio === studio);
@@ -6024,7 +6058,7 @@ function seatingSetNum(view, studio, tableIdx, newNum) {
 }
 
 function seatingAddTable(view, studio) {
-  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
   const key = getSeatingKey(view, studio);
   if (!_seatingData[key]) {
     const a = buildSeatingAssignments(view, comp).find(x => x.studio === studio);
@@ -6040,7 +6074,7 @@ function seatingAddTable(view, studio) {
 }
 
 function seatingRemoveTable(view, studio, tableIdx) {
-  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
   const key = getSeatingKey(view, studio);
   if (!_seatingData[key]) {
     const a = buildSeatingAssignments(view, comp).find(x => x.studio === studio);
@@ -6067,7 +6101,7 @@ function seatingResetAll(view) {
 
 
 function printSeatingList(view) {
-  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
   const isbanquet = view === 'banquet';
 
   const assignments = buildSeatingAssignments(view, comp);
@@ -6228,7 +6262,7 @@ function printSeatingList(view) {
 }
 
 async function generateStatusSummaryPDF() {
-  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
   const allStudios = getAllStudiosForComp(comp);
   const rows = [];
 
@@ -7291,7 +7325,7 @@ async function renderSetupTab() {
   const el = document.getElementById('setupContent');
   el.innerHTML = '<p style="color:var(--muted);padding:1rem;font-size:0.8rem">Loading setup...</p>';
   const sd = await loadSetupData();
-  const comp = document.getElementById('orgCompSelect')?.value || appState.competitions[0];
+  const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
 
   const groups = buildTableGroups(comp, sd.overrides||[]);
   const totalTables = groups.reduce((s,g)=>s+g.tables.length,0);
@@ -7457,7 +7491,7 @@ function _persistSetupGroups() {
 
 function printSetupDiagram() {
   const groups = window._setupGroups;
-  const comp   = window._setupComp || (document.getElementById('orgCompSelect')?.value || appState.competitions[0]);
+  const comp   = window._setupComp || (document.getElementById('orgCompSelect')?.value || getActiveComp());
   const sd     = setupData;
   if (!groups) { alert('Open the Room Setup tab first.'); return; }
 
@@ -7804,11 +7838,14 @@ function initApp() {
       enableBtn();
       loadState();
     }, { once: true });
-    // Fallback after 3 seconds — load anyway and always re-enable button
+    // Fallback after 5 seconds
     setTimeout(() => {
       enableBtn();
-      if (!window._fbReady) loadState();
-    }, 3000);
+      if (!window._fbReady) {
+        console.warn('Firebase not ready after 5s — loading anyway');
+        loadState();
+      }
+    }, 5000);
   }
 }
 initApp();
