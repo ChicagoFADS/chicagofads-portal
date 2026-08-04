@@ -792,6 +792,7 @@
       <select id="studioCompSelect" onchange="loadStudioData()" style="max-width:280px"></select>
       <button class="btn btn-sm" style="width:auto;margin-top:0;background:var(--gold);color:var(--black)" onclick="generateRegistrationPDF(currentStudio, currentComp)">📄 Generate Registration PDF</button>
     </div>
+    <div id="deadlineBanner"></div>
 
     <!-- TABS -->
     <div class="tabs">
@@ -1281,6 +1282,7 @@ function getStudioData(studio, comp) {
   if (!d.meals)        d.meals       = [];
   if (!d.compEntries)  d.compEntries = [];
   if (!d.danceEntries) d.danceEntries = [];
+  if (!d.namedEntries) d.namedEntries = {};
   return d;
 }
 
@@ -1519,6 +1521,10 @@ function loadStudioData() {
   currentComp = document.getElementById('studioCompSelect').value;
   const d = getStudioData(currentStudio, currentComp);
 
+  // Update deadline banner
+  const banner = document.getElementById('deadlineBanner');
+  if (banner) banner.innerHTML = deadlineBanner(currentComp);
+
   // Migrate meals-only people into tickets[] (from old loaders)
   let migrated = false;
   d.meals.forEach(m => {
@@ -1609,7 +1615,62 @@ function calcTicketFee(r) {
 }
 
 // ── PEOPLE LIST (merged tickets + meals) ──
-// ── COMP-SPECIFIC MEAL CHOICES ──
+// ── COMPETITION DEADLINES ──
+const COMP_DEADLINES = {
+  'DanceSport Challenge 2026': {
+    entries: new Date('2026-08-17T23:59:59'),  // accounting/entries due
+    payments: new Date('2026-09-04T23:59:59'), // payments due
+  },
+  'Freddy Ball 2026': {
+    entries: null,
+    payments: null,
+  },
+  'Chicago Open 2026': {
+    entries: null,
+    payments: null,
+  },
+  'Holiday Star Ball 2026': {
+    entries: null,
+    payments: null,
+  },
+};
+
+function getDeadlineStatus(comp) {
+  const d = COMP_DEADLINES[comp];
+  if (!d) return null;
+  const now = new Date();
+  return {
+    entriesDue:    d.entries,
+    paymentsDue:   d.payments,
+    entriesLate:   d.entries  && now > d.entries,
+    paymentsLate:  d.payments && now > d.payments,
+    entriesSoon:   d.entries  && !( now > d.entries)  && (d.entries  - now) < 7 * 24*60*60*1000,
+    paymentsSoon:  d.payments && !(now > d.payments) && (d.payments - now) < 7 * 24*60*60*1000,
+  };
+}
+
+function deadlineBanner(comp) {
+  const s = getDeadlineStatus(comp);
+  if (!s) return '';
+  const fmt = d => d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  const parts = [];
+  if (s.entriesLate) {
+    parts.push(`<span style="background:#d9534f;color:#fff;padding:3px 10px;border-radius:4px;font-weight:700">⚠ Entries &amp; Accounting past due (${fmt(s.entriesDue)})</span>`);
+  } else if (s.entriesSoon) {
+    parts.push(`<span style="background:#e67e22;color:#fff;padding:3px 10px;border-radius:4px;font-weight:700">⏰ Entries &amp; Accounting due ${fmt(s.entriesDue)}</span>`);
+  } else if (s.entriesDue) {
+    parts.push(`<span style="background:#5a5a5a;color:#fff;padding:3px 10px;border-radius:4px">📋 Entries &amp; Accounting due ${fmt(s.entriesDue)}</span>`);
+  }
+  if (s.paymentsLate) {
+    parts.push(`<span style="background:#d9534f;color:#fff;padding:3px 10px;border-radius:4px;font-weight:700">⚠ Payment past due (${fmt(s.paymentsDue)})</span>`);
+  } else if (s.paymentsSoon) {
+    parts.push(`<span style="background:#e67e22;color:#fff;padding:3px 10px;border-radius:4px;font-weight:700">⏰ Payment due ${fmt(s.paymentsDue)}</span>`);
+  } else if (s.paymentsDue) {
+    parts.push(`<span style="background:#5a5a5a;color:#fff;padding:3px 10px;border-radius:4px">💳 Payment due ${fmt(s.paymentsDue)}</span>`);
+  }
+  if (!parts.length) return '';
+  return `<div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;padding:0.5rem 0.75rem;background:#fafafa;border-radius:6px;border:1px solid #eee;font-size:0.7rem">${parts.join('')}</div>`;
+}
 function getMealChoices(comp) {
   const c = comp || currentComp || getActiveComp();
   if (c && c.includes('DanceSport')) {
@@ -1651,7 +1712,7 @@ function renderPeopleList(d) {
       if (existing) {
         d.meals[i] = existing;
       } else {
-        d.meals[i] = { name:t.name, proam:t.proam||'', thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false };
+        d.meals[i] = { name:t.name, proam:t.proam||'', thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false, notStaying:false, passedTo:'' };
       }
     } else if (!d.meals[i].name) {
       d.meals[i].name = t.name;
@@ -1702,6 +1763,11 @@ function renderPeopleList(d) {
             ${getMealOptions(m.satMealChoice, currentComp)}
           </select>
           <input class="allergy-inline" type="text" value="${m.allergy||''}" placeholder="Allergy?" onchange="updatePersonAllergy(${i},this.value)"/>
+          <span class="chk-sep"></span>
+          <label style="font-size:0.65rem;color:${m.notStaying?'#c77':'var(--muted)'};display:inline-flex;align-items:center;gap:3px">
+            <input type="checkbox" ${m.notStaying?'checked':''} onchange="updatePersonMeal(${i},'notStaying',this.checked)"/> Not staying
+          </label>
+          ${m.notStaying ? `<input type="text" value="${m.passedTo||''}" placeholder="Passed to (name)" style="width:120px;font-size:0.65rem" onchange="updatePersonMeal(${i},'passedTo',this.value)"/>` : ''}
         </div>`
       : `<div class="chk-row">
           ${c(m.thuDinner,   `updatePersonMeal(${i},'thuDinner',this.checked)`,   'Thu Din','82')}
@@ -1716,7 +1782,12 @@ function renderPeopleList(d) {
             <select class="dinner-inline${mealMissing?' missing':''}" onchange="updatePersonMealChoice(${i},this.value)">
               <option value="">Dinner?</option>
               ${getMealOptions(m.satMealChoice, currentComp)}
-            </select>${mealMissing?'<span style="color:var(--red);font-size:0.6rem">⚠</span>':''}` : ''}
+            </select>${mealMissing?'<span style="color:var(--red);font-size:0.6rem">⚠</span>':''}
+            <span class="chk-sep"></span>
+            <label style="font-size:0.65rem;color:${m.notStaying?'#c77':'var(--muted)'};display:inline-flex;align-items:center;gap:3px">
+              <input type="checkbox" ${m.notStaying?'checked':''} onchange="updatePersonMeal(${i},'notStaying',this.checked)"/> Not staying
+            </label>
+            ${m.notStaying ? `<input type="text" value="${m.passedTo||''}" placeholder="Passed to (name)" style="width:120px;font-size:0.65rem" onchange="updatePersonMeal(${i},'passedTo',this.value)"/>` : ''}` : ''}
           <input class="allergy-inline" type="text" value="${m.allergy||''}" placeholder="Allergy?" onchange="updatePersonAllergy(${i},this.value)"/>
         </div>`;
 
@@ -1916,7 +1987,7 @@ function addPersonRow() {
   const d = getStudioData(currentStudio, currentComp);
   const isStudioAdd = currentUser && currentUser.type === 'studio';
   d.tickets.push({ name:'', proam:'', vipAlc:'ALC', firstTimer:false, compFee:false, thuMat:false, thuEve:false, friMat:false, friEve:false, satMat:false, gift:false, needsReview:isStudioAdd });
-  d.meals.push({   name:'', proam:'', thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false });
+  d.meals.push({   name:'', proam:'', thuDinner:false, friBrk:false, friLunch:false, friDinner:false, satBrk:false, satLunch:false, satCocktail:false, satMealChoice:'', allergy:'', childrenMeal:false, notStaying:false, passedTo:'' });
   renderPeopleList(d);
   triggerAutoSave();
   // Focus the new name input
@@ -1948,11 +2019,11 @@ const COMP_DIVISIONS = [
   { label: 'Championship — 3-Dance',               vip: 105, alc: 108, excludeChicagoOpen: false },
   { label: 'Championship — 4-Dance',               vip: 115, alc: 118, excludeChicagoOpen: false },
   { label: 'Championship — 5-Dance',               vip: 125, alc: 128, excludeChicagoOpen: false },
-  { label: 'Solo Entries',                         vip: 110, alc: 113, excludeChicagoOpen: false },
-  { label: 'Novelty Entries',                      vip: 110, alc: 113, excludeChicagoOpen: false },
-  { label: 'Showcase Entries',                     vip: 115, alc: 118, excludeChicagoOpen: false },
+  { label: 'Solo Entries',                         vip: 110, alc: 113, excludeChicagoOpen: false, namedType: 'roster' },
+  { label: 'Novelty Entries',                      vip: 110, alc: 113, excludeChicagoOpen: false, namedType: 'roster' },
+  { label: 'Showcase Entries',                     vip: 115, alc: 118, excludeChicagoOpen: false, namedType: 'roster' },
   { label: 'Formation — Saturday Eve',             vip: 26,  alc: 26,  excludeChicagoOpen: true  },
-  { label: 'Formation — Group Production',         vip: 50,  alc: 50,  excludeChicagoOpen: false },
+  { label: 'Formation — Group Production',         vip: 50,  alc: 50,  excludeChicagoOpen: false, namedType: 'production' },
   { label: 'Professional — Novice/Mixed Novice',   vip: 60,  alc: 60,  excludeChicagoOpen: true  },
   { label: 'Professional — Closed Entries',        vip: 60,  alc: 60,  excludeChicagoOpen: false },
   { label: 'Professional — Open Entries',          vip: 60,  alc: 60,  excludeChicagoOpen: false },
@@ -1988,6 +2059,7 @@ function syncDanceEntriesToCompEntries(d) {
 function renderCompEntriesTable(saved) {
   const divisions = getDivisionsForComp(currentComp);
   const tbody = document.getElementById('compEntriesBody');
+  const d0 = getStudioData(currentStudio, currentComp);
   tbody.innerHTML = '';
   divisions.forEach((div) => {
     // Always use the original index in COMP_DIVISIONS to keep compEntries aligned
@@ -1998,8 +2070,10 @@ function renderCompEntriesTable(saved) {
     const vipTotal = vipQty * div.vip;
     const alcTotal = alcQty * div.alc;
     const row = document.createElement('tr');
+    const namesCount = (d0.namedEntries && d0.namedEntries[i]) ? d0.namedEntries[i].length : 0;
     row.innerHTML = `
-      <td style="color:var(--text);font-size:0.72rem">${div.label}</td>
+      <td style="color:var(--text);font-size:0.72rem">${div.label}${div.namedType ? `
+        <button type="button" onclick="toggleNamesPanel(${i})" style="margin-left:6px;font-size:0.62rem;background:${namesCount?'var(--gold)':'#f5f0e8'};color:${namesCount?'#fff':'var(--muted)'};border:none;border-radius:3px;padding:1px 6px;cursor:pointer">📝 Names (${namesCount})</button>` : ''}</td>
       <td style="color:var(--muted)">$${div.vip}</td>
       <td style="color:var(--muted)">$${div.alc}</td>
       <td><input type="number" min="0" value="${vipQty}" style="width:70px" onchange="updateCompEntry(${i},'vipQty',+this.value)"/></td>
@@ -2009,8 +2083,102 @@ function renderCompEntriesTable(saved) {
       <td id="ceRow${i}" style="color:var(--gold)">$${(vipTotal+alcTotal).toFixed(2)}</td>
     `;
     tbody.appendChild(row);
+    if (div.namedType) {
+      const panelRow = document.createElement('tr');
+      panelRow.id = `namesPanelRow${i}`;
+      panelRow.style.display = 'none';
+      panelRow.innerHTML = `<td colspan="8" style="background:#faf7f1;padding:0.6rem 0.75rem" id="namesPanel${i}"></td>`;
+      tbody.appendChild(panelRow);
+    }
   });
   updateCompEntriesTotals();
+}
+
+function toggleNamesPanel(i) {
+  const row = document.getElementById('namesPanelRow'+i);
+  if (!row) return;
+  const showing = row.style.display !== 'none';
+  row.style.display = showing ? 'none' : 'table-row';
+  if (!showing) renderNamedEntries(i);
+}
+
+function renderNamedEntries(i) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.namedEntries) d.namedEntries = {};
+  if (!d.namedEntries[i]) d.namedEntries[i] = [];
+  const div = COMP_DIVISIONS[i];
+  const list = d.namedEntries[i];
+  const el = document.getElementById('namesPanel'+i);
+  if (!el) return;
+
+  if (div.namedType === 'production') {
+    el.innerHTML = list.map((e, idx) => `
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:5px;flex-wrap:wrap">
+        <input placeholder="Production/Dance name" value="${e.productionName||''}" style="width:170px;font-size:0.72rem" onchange="updateNamedEntry(${i},${idx},'productionName',this.value)"/>
+        <input placeholder="Teacher credit" value="${e.teacherCredit||''}" style="width:150px;font-size:0.72rem" onchange="updateNamedEntry(${i},${idx},'teacherCredit',this.value)"/>
+        <input placeholder="Participants (comma-separated)" value="${e.participants||''}" style="width:280px;font-size:0.72rem" onchange="updateNamedEntry(${i},${idx},'participants',this.value)"/>
+        <button onclick="removeNamedEntry(${i},${idx})" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:0.85rem">✕</button>
+      </div>`).join('') || '<p style="font-size:0.7rem;color:var(--muted);margin-bottom:5px">No production numbers added yet.</p>';
+    el.innerHTML += `<button type="button" class="btn btn-sm btn-outline" onclick="addNamedEntry(${i})">+ Add Production Number</button>`;
+  } else {
+    el.innerHTML = list.map((e, idx) => `
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:5px;flex-wrap:wrap">
+        <input placeholder="Student/Couple name" value="${e.student||''}" style="width:150px;font-size:0.72rem" onchange="updateNamedEntry(${i},${idx},'student',this.value)"/>
+        <input placeholder="Teacher" value="${e.teacher||''}" style="width:130px;font-size:0.72rem" onchange="updateNamedEntry(${i},${idx},'teacher',this.value)"/>
+        <select style="font-size:0.72rem" onchange="updateNamedEntry(${i},${idx},'level',this.value)">
+          <option value="">— Level —</option>
+          ${['Bronze','Silver','Gold'].map(lv=>`<option ${e.level===lv?'selected':''}>${lv}</option>`).join('')}
+        </select>
+        <input placeholder="Dance/Title" value="${e.title||''}" style="width:160px;font-size:0.72rem" onchange="updateNamedEntry(${i},${idx},'title',this.value)"/>
+        <select style="font-size:0.72rem" onchange="updateNamedEntry(${i},${idx},'vipAlc',this.value)">
+          <option value="">— VIP/ALC —</option>
+          <option ${e.vipAlc==='VIP'?'selected':''}>VIP</option>
+          <option ${e.vipAlc==='ALC'?'selected':''}>ALC</option>
+        </select>
+        <button onclick="removeNamedEntry(${i},${idx})" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:0.85rem">✕</button>
+      </div>`).join('') || '<p style="font-size:0.7rem;color:var(--muted);margin-bottom:5px">No entries added yet.</p>';
+    el.innerHTML += `<button type="button" class="btn btn-sm btn-outline" onclick="addNamedEntry(${i})">+ Add Entry</button>`;
+  }
+}
+
+function addNamedEntry(i) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.namedEntries) d.namedEntries = {};
+  if (!d.namedEntries[i]) d.namedEntries[i] = [];
+  const div = COMP_DIVISIONS[i];
+  d.namedEntries[i].push(div.namedType === 'production'
+    ? { productionName:'', teacherCredit:'', participants:'' }
+    : { student:'', teacher:'', level:'', title:'', vipAlc:'' });
+  renderNamedEntries(i);
+  refreshNamesButton(i);
+  triggerAutoSave();
+}
+
+function updateNamedEntry(i, idx, field, val) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.namedEntries[i] || !d.namedEntries[i][idx]) return;
+  d.namedEntries[i][idx][field] = val;
+  triggerAutoSave();
+}
+
+function removeNamedEntry(i, idx) {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.namedEntries[i]) return;
+  d.namedEntries[i].splice(idx, 1);
+  renderNamedEntries(i);
+  refreshNamesButton(i);
+  triggerAutoSave();
+}
+
+function refreshNamesButton(i) {
+  const d = getStudioData(currentStudio, currentComp);
+  const count = (d.namedEntries && d.namedEntries[i]) ? d.namedEntries[i].length : 0;
+  const btn = document.querySelector(`button[onclick="toggleNamesPanel(${i})"]`);
+  if (btn) {
+    btn.textContent = `📝 Names (${count})`;
+    btn.style.background = count ? 'var(--gold)' : '#f5f0e8';
+    btn.style.color = count ? '#fff' : 'var(--muted)';
+  }
 }
 
 function updateCompEntry(idx, field, value) {
@@ -2798,9 +2966,13 @@ function renderMealsTab() {
   const _mtChoices = getMealChoices(_mtComp);
   const dinnerChoiceTotals = {}; _mtChoices.forEach(c=>dinnerChoiceTotals[c]=0); dinnerChoiceTotals['Kids Meal']=0;
 
+  const passedSeats = [];
   const studioRows = allStudios.map(s => {
     const d = getStudioData(s, comp);
     const row = { studio: s };
+    d.meals.filter(r => r.notStaying).forEach(r => {
+      passedSeats.push({ studio: s, name: r.name, passedTo: r.passedTo||'(not yet assigned)', meal: r.childrenMeal?'Kids Meal':(r.satMealChoice||'—') });
+    });
     const vipCount = d.vip.filter(r=>r.name).length;
     mealKeys.forEach(m => {
       // VIPs always get all meals. ALC counted by their actual checkboxes.
@@ -2850,6 +3022,25 @@ function renderMealsTab() {
         </div>
       </div>
     </div>
+
+    ${passedSeats.length ? `
+    <div class="section-card fade-up" style="animation-delay:0.08s">
+      <div class="section-header"><div class="section-title">🔄 Passed Seats — Not Attending, Given to Someone Else</div></div>
+      <div class="section-body" style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Studio</th><th>Original Name</th><th>Passed To</th><th>Meal</th></tr></thead>
+          <tbody>
+          ${passedSeats.map(p=>`<tr>
+            <td style="color:var(--gold-light);font-family:'Cormorant Garamond',serif">${p.studio}</td>
+            <td>${p.name}</td>
+            <td style="color:${p.passedTo==='(not yet assigned)'?'var(--red)':'inherit'}">${p.passedTo}</td>
+            <td>${p.meal}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table>
+        <p style="font-size:0.68rem;color:var(--muted);margin-top:0.4rem">These seats stay in the totals above (already paid for) — just note who's actually sitting in them for check-in and place cards.</p>
+      </div>
+    </div>` : ''}
 
     <div class="section-card fade-up" style="animation-delay:0.1s">
       <div class="section-header"><div class="section-title">Session Ticket Counts — All Studios Combined</div></div>
@@ -3133,6 +3324,7 @@ function renderAdminTab() {
         </div>
         <button class="btn btn-sm btn-success" style="width:auto" onclick="addPayment()">+ Log Payment</button>
         <hr class="divider"/>
+        <div id="paymentsDeadlineBanner"></div>
         <div id="paymentsTable"></div>
       </div>
     </div>
@@ -4372,9 +4564,15 @@ async function renderPaymentsTable() {
   const el = document.getElementById('paymentsTable');
   if (!el) return;
 
+  // Show deadline banner above payments for active comp
+  const activeComp = getActiveComp();
+  const dBanner = deadlineBanner(activeComp);
+  const bannerEl = document.getElementById('paymentsDeadlineBanner');
+  if (bannerEl) bannerEl.innerHTML = dBanner;
+
   let html = `<table class="data-table" style="margin-top:0.5rem">
     <thead><tr>
-      <th>Studio</th><th>Competition</th><th>Total Owed</th><th>Paid / Credits</th><th>Balance</th><th>Payments</th>
+      <th>Studio</th><th>Competition</th><th>Total Owed</th><th>Paid / Credits</th><th>Balance</th><th>Status</th><th>Payments</th>
     </tr></thead><tbody>`;
 
   for (const comp of appState.competitions) {
@@ -4403,6 +4601,20 @@ async function renderPaymentsTable() {
           }).join('<br>')
         : '<span style="color:var(--muted);font-size:0.6rem">No payments logged</span>';
 
+      const ds = getDeadlineStatus(comp);
+      let statusCell = '—';
+      if (ds) {
+        if (balance > 0.005 && ds.paymentsLate) {
+          statusCell = `<span style="color:#d9534f;font-weight:700;font-size:0.7rem">⚠ Payment overdue</span>`;
+        } else if (balance > 0.005 && ds.paymentsSoon) {
+          statusCell = `<span style="color:#e67e22;font-weight:700;font-size:0.7rem">⏰ Due soon</span>`;
+        } else if (balance <= 0.005) {
+          statusCell = `<span style="color:#27ae60;font-size:0.7rem">✓ Paid</span>`;
+        } else {
+          statusCell = `<span style="color:var(--muted);font-size:0.7rem">Pending</span>`;
+        }
+      }
+
       html += `<tr>
         <td style="color:var(--gold-light);font-family:'Cormorant Garamond',serif">${studio}</td>
         <td style="font-size:0.65rem;color:var(--muted)">${comp}</td>
@@ -4411,6 +4623,7 @@ async function renderPaymentsTable() {
         <td style="color:${balance>0.005?'var(--red)':balance<-0.005?'var(--gold)':'var(--green)'};font-weight:500">
           $${Math.abs(balance).toFixed(2)}${balance<-0.005?' (overpaid)':balance<0.005?' ✓':''}
         </td>
+        <td>${statusCell}</td>
         <td>${paymentDetails}</td>
       </tr>`;
     }
@@ -7569,12 +7782,12 @@ function printSetupDiagram() {
 // ─── DANCE ENTRIES ───
 
 const DANCE_STYLES = {
-  'American Smooth':   { dances: ['WA','TA','FT','VW'], label: 'Am. Smooth' },
-  'American Rhythm':   { dances: ['CC','R','ECS','BOL','MA'], label: 'Am. Rhythm' },
+  'American Smooth':   { dances: ['WA','TA','FT','VW','AT'], label: 'Am. Smooth' },
+  'American Rhythm':   { dances: ['CC','R','ESW','BOL','MA','MER','SA','WSW','PD','SAL','HUS','BAC'], label: 'Am. Rhythm' },
   'Int\'l Ballroom':   { dances: ['WA','TA','VW','FT','QS'], label: 'Int\'l Ballroom' },
   'Int\'l Latin':      { dances: ['CC','SA','R','PD','J'], label: 'Int\'l Latin' },
   'Nightclub':         { dances: ['H','WCS','NC2S','SAL','BAC'], label: 'Nightclub' },
-  'Country':           { dances: ['CW','CC','ECS','WCS','TS'], label: 'Country' },
+  'Country':           { dances: ['TS','POL','WA','CC','ECS','WCS'], label: 'Country' },
   'Smooth Showcase':   { dances: ['SHOWCASE'], label: 'Showcase' },
   'Solo':              { dances: ['SOLO'], label: 'Solo' },
 };
@@ -7609,6 +7822,23 @@ const LEVELS = [
   { num:21, label:'21 — Bronze Proficiency',        group:'Proficiency' },
   { num:22, label:'22 — Silver Proficiency',        group:'Proficiency' },
   { num:23, label:'23 — Gold Proficiency',          group:'Proficiency' },
+  { num:24, label:'24 — Novice Bronze Closed Int\'l',      group:'Intl Group 1' },
+  { num:25, label:'25 — Newcomers Bronze Closed Int\'l',   group:'Intl Group 1' },
+  { num:26, label:'26 — Intermediate Bronze Closed Int\'l',group:'Intl Group 2' },
+  { num:27, label:'27 — Full Bronze Closed Int\'l',        group:'Intl Group 3' },
+  { num:28, label:'28 — Newcomers Silver Closed Int\'l',   group:'Intl Group 4' },
+  { num:29, label:'29 — Intermediate Silver Closed Int\'l',group:'Intl Group 4' },
+  { num:30, label:'30 — Full Silver Closed Int\'l',        group:'Intl Group 5' },
+  { num:31, label:'31 — Newcomers Gold Closed Int\'l',     group:'Intl Group 6' },
+  { num:32, label:'32 — Intermediate Gold Closed Int\'l',  group:'Intl Group 6' },
+  { num:33, label:'33 — Full Gold Closed Int\'l',          group:'Intl Group 7' },
+  { num:34, label:'34 — Bronze Open Int\'l',               group:'Intl Group 2' },
+  { num:35, label:'35 — Silver Open Int\'l',               group:'Intl Group 4' },
+  { num:36, label:'36 — Gold Open Int\'l',                 group:'Intl Group 6' },
+  { num:37, label:'37 — Open Int\'l',                      group:'Intl Open' },
+  { num:38, label:'38 — Bronze Int\'l Proficiency',        group:'Intl Proficiency' },
+  { num:39, label:'39 — Silver Int\'l Proficiency',        group:'Intl Proficiency' },
+  { num:40, label:'40 — Gold Int\'l Proficiency',          group:'Intl Proficiency' },
 ];
 
 function getStudioPeople(d) {
