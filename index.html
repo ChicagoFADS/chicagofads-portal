@@ -27,6 +27,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js';
   import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js';
+  import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyBvtHu4Q-GGE5p4BHxdZeq4ur9N-P5yg0Y",
@@ -38,9 +39,9 @@
   };
 
   const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  const db  = getFirestore(app);
+  const storage = getStorage(app);
 
-  // Expose Firebase helpers to global scope for the rest of the app
   window._db = db;
   window._fbDoc = doc;
   window._fbGetDoc = getDoc;
@@ -48,9 +49,14 @@
   window._fbCollection = collection;
   window._fbGetDocs = getDocs;
   window._fbDeleteDoc = deleteDoc;
+  window._storage = storage;
+  window._fbStorageRef = ref;
+  window._fbUploadBytesResumable = uploadBytesResumable;
+  window._fbGetDownloadURL = getDownloadURL;
+  window._fbDeleteObject = deleteObject;
+  window._fbListAll = listAll;
   window._fbReady = true;
 
-  // Signal that Firebase is ready
   document.dispatchEvent(new Event('firebase-ready'));
 </script>
 <style>
@@ -967,7 +973,8 @@
         <div class="section-body">
           <div id="entryFormsList"></div>
           <label style="margin-top:1rem">Upload Entry Form</label>
-          <input type="file" id="entryFormUpload" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple style="margin-bottom:1rem"/>
+          <input type="file" id="entryFormUpload" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple style="margin-bottom:0.5rem"/>
+          <div id="upload-progress-entryForms" style="display:none;font-size:0.7rem;color:var(--gold);margin-bottom:0.5rem"></div>
           <button class="btn btn-sm btn-success" style="width:auto" onclick="uploadDocs('entryForms','entryFormUpload')">Upload</button>
         </div>
       </div>
@@ -980,7 +987,8 @@
         <div class="section-body">
           <div id="waiversList"></div>
           <label style="margin-top:1rem">Upload Waiver &amp; Release</label>
-          <input type="file" id="waiverUpload" accept=".pdf,.doc,.docx" multiple style="margin-bottom:1rem"/>
+          <input type="file" id="waiverUpload" accept=".pdf,.doc,.docx" multiple style="margin-bottom:0.5rem"/>
+          <div id="upload-progress-waivers" style="display:none;font-size:0.7rem;color:var(--gold);margin-bottom:0.5rem"></div>
           <button class="btn btn-sm btn-success" style="width:auto" onclick="uploadDocs('waivers','waiverUpload')">Upload</button>
         </div>
       </div>
@@ -993,7 +1001,8 @@
         <div class="section-body">
           <div id="summaryEntriesList"></div>
           <label style="margin-top:1rem">Upload Summary of Entries</label>
-          <input type="file" id="summaryEntriesUpload" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple style="margin-bottom:1rem"/>
+          <input type="file" id="summaryEntriesUpload" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple style="margin-bottom:0.5rem"/>
+          <div id="upload-progress-summaryEntries" style="display:none;font-size:0.7rem;color:var(--gold);margin-bottom:0.5rem"></div>
           <button class="btn btn-sm btn-success" style="width:auto" onclick="uploadDocs('summaryEntries','summaryEntriesUpload')">Upload</button>
         </div>
       </div>
@@ -3410,26 +3419,58 @@ function getDocKey(studio, comp, type) {
 async function uploadDocs(type, inputId) {
   const input = document.getElementById(inputId);
   if (!input.files.length) return alert('Please select a file first.');
+  if (!window._storage) return alert('Storage not ready — please refresh and try again.');
 
-  const existing = await loadDocList(currentStudio, currentComp, type);
+  const studio = currentStudio;
+  const comp   = currentComp;
 
   for (const file of input.files) {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const doc = {
-        name: file.name,
-        size: file.size,
-        uploaded: new Date().toLocaleString(),
-        data: e.target.result // base64 data URL
-      };
-      existing.push(doc);
-      try {
-        await fbSet(getDocKey(currentStudio, currentComp, type), JSON.stringify(existing));
-        showSaveBanner();
-        renderStudioDocs();
-      } catch(err) { alert('Upload failed — file may be too large (5MB limit per category).'); }
-    };
-    reader.readAsDataURL(file);
+    // No file size limit with Firebase Storage — but warn on very large files
+    if (file.size > 20 * 1024 * 1024) {
+      if (!confirm(file.name + ' is ' + (file.size/1024/1024).toFixed(1) + 'MB — that\'s large. Continue?')) continue;
+    }
+
+    // Show progress
+    const progressId = 'upload-progress-' + type;
+    const progressEl = document.getElementById(progressId);
+    if (progressEl) { progressEl.style.display = 'block'; progressEl.textContent = 'Uploading...'; }
+
+    // Storage path: docs/studio/comp/type/filename
+    const path = `docs/${studio}/${comp}/${type}/${Date.now()}_${file.name}`;
+    const storageRef = window._fbStorageRef(window._storage, path);
+    const uploadTask = window._fbUploadBytesResumable(storageRef, file);
+
+    await new Promise((resolve, reject) => {
+      uploadTask.on('state_changed',
+        (snapshot) => {
+          const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          if (progressEl) progressEl.textContent = `Uploading... ${pct}%`;
+        },
+        (error) => {
+          console.error('Upload error:', error);
+          if (progressEl) progressEl.textContent = 'Upload failed — try again.';
+          reject(error);
+        },
+        async () => {
+          // Upload complete — save metadata to Firestore
+          const downloadURL = await window._fbGetDownloadURL(uploadTask.snapshot.ref);
+          const existing = await loadDocList(studio, comp, type);
+          existing.push({
+            name: file.name,
+            size: file.size,
+            uploaded: new Date().toLocaleString(),
+            url: downloadURL,
+            path: path
+          });
+          await fbSet(getDocKey(studio, comp, type), JSON.stringify(existing));
+          if (progressEl) { progressEl.textContent = '✓ Uploaded!'; setTimeout(() => { progressEl.style.display='none'; }, 2000); }
+          await renderStudioDocs();
+          resolve();
+        }
+      );
+    }).catch(() => {
+      if (progressEl) progressEl.textContent = 'Upload failed.';
+    });
   }
   input.value = '';
 }
@@ -3446,6 +3487,14 @@ async function loadDocList(studio, comp, type) {
 async function deleteDoc(studio, comp, type, index) {
   if (!confirm('Remove this file?')) return;
   const docs = await loadDocList(studio, comp, type);
+  const docItem = docs[index];
+  // Delete from Firebase Storage if it has a path
+  if (docItem && docItem.path && window._storage && window._fbDeleteObject) {
+    try {
+      const storageRef = window._fbStorageRef(window._storage, docItem.path);
+      await window._fbDeleteObject(storageRef);
+    } catch(e) { console.warn('Storage delete failed:', e); }
+  }
   docs.splice(index, 1);
   await fbSet(getDocKey(studio, comp, type), JSON.stringify(docs));
   renderStudioDocs();
@@ -3459,18 +3508,22 @@ function formatBytes(bytes) {
 
 function docListHTML(docs, studio, comp, type, canDelete) {
   if (!docs.length) return `<div style="color:var(--muted);font-size:0.7rem;padding:0.5rem 0">No files uploaded yet.</div>`;
-  return docs.map((d, i) => `
+  return docs.map((d, i) => {
+    // Support both old base64 (d.data) and new Storage URL (d.url)
+    const href = d.url || d.data || '#';
+    const isLink = href !== '#';
+    return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0;border-bottom:1px solid var(--border)">
       <div>
-        <div style="font-size:0.75rem;color:var(--text)">${d.name}</div>
+        <div style="font-size:0.75rem;color:var(--text)">📄 ${d.name}</div>
         <div style="font-size:0.6rem;color:var(--muted);margin-top:0.15rem">${formatBytes(d.size)} &nbsp;·&nbsp; ${d.uploaded}</div>
       </div>
       <div style="display:flex;gap:0.5rem;align-items:center">
-        <a href="${d.data}" download="${d.name}" style="color:var(--gold);font-size:0.65rem;letter-spacing:0.08em;text-decoration:none;border:1px solid var(--gold-dim);padding:0.25rem 0.6rem">↓ Download</a>
+        ${isLink ? `<a href="${href}" target="_blank" download="${d.name}" style="color:var(--gold);font-size:0.65rem;letter-spacing:0.08em;text-decoration:none;border:1px solid var(--gold-dim);padding:0.25rem 0.6rem">↓ Download</a>` : ''}
         ${canDelete ? `<button class="btn btn-sm btn-danger" onclick="deleteDoc('${studio}','${comp}','${type}',${i})">✕</button>` : ''}
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 async function renderStudioDocs() {
