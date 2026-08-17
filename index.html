@@ -911,7 +911,11 @@
       <div class="section-card">
         <div class="section-header">
           <div class="section-title">Competition Entry Fees — by Division</div>
-          <button class="btn btn-sm btn-success" onclick="saveAll()">Save Data</button>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <button id="manualModeBtn" class="btn btn-sm btn-outline" style="width:auto;margin:0;font-size:0.65rem" onclick="toggleManualEntryMode()" title="Manual mode lets you type your own numbers without auto-sync from dance entries">✏️ Manual Mode: OFF</button>
+            <button class="btn btn-sm btn-outline" style="width:auto;margin:0;font-size:0.65rem;background:#1a5276;color:#fff;border-color:#1a5276" onclick="exportEntriesPDF()">📄 Export PDF</button>
+            <button class="btn btn-sm btn-success" onclick="saveAll()">Save</button>
+          </div>
         </div>
         <div class="section-body" style="overflow-x:auto">
 
@@ -1153,9 +1157,22 @@ const DEFAULT_COMPETITIONS = [
 ];
 
 // ── FIREBASE HELPERS ──
+
+// Wait for Firebase to be ready (up to 8 seconds)
+function waitForFirebase(timeout = 8000) {
+  return new Promise((resolve, reject) => {
+    if (window._fbDoc && window._db) { resolve(); return; }
+    const start = Date.now();
+    const check = setInterval(() => {
+      if (window._fbDoc && window._db) { clearInterval(check); resolve(); }
+      else if (Date.now() - start > timeout) { clearInterval(check); reject(new Error('Firebase timeout')); }
+    }, 100);
+  });
+}
+
 async function fbGet(key) {
   try {
-    if (!window._fbDoc || !window._db) throw new Error('Firebase not ready');
+    await waitForFirebase();
     const ref = window._fbDoc(window._db, 'hub', key);
     const snap = await window._fbGetDoc(ref);
     return snap.exists() ? snap.data().value : null;
@@ -1164,7 +1181,7 @@ async function fbGet(key) {
 
 async function fbSet(key, value) {
   try {
-    if (!window._fbDoc || !window._db) throw new Error('Firebase not ready');
+    await waitForFirebase();
     const ref = window._fbDoc(window._db, 'hub', key);
     const strValue = typeof value === 'string' ? value : JSON.stringify(value);
     await window._fbSetDoc(ref, { value: strValue });
@@ -2062,7 +2079,99 @@ function getDivisionsForComp(comp) {
   return COMP_DIVISIONS;
 }
 
+// ── ENTRIES MANUAL MODE ──
+let _manualEntryMode = false;
+
+function toggleManualEntryMode() {
+  _manualEntryMode = !_manualEntryMode;
+  const btn = document.getElementById('manualModeBtn');
+  if (btn) {
+    btn.textContent = `✏️ Manual Mode: ${_manualEntryMode ? 'ON' : 'OFF'}`;
+    btn.style.background = _manualEntryMode ? 'var(--gold)' : '';
+    btn.style.color = _manualEntryMode ? 'var(--black)' : '';
+    btn.style.borderColor = _manualEntryMode ? 'var(--gold)' : '';
+  }
+  if (_manualEntryMode) {
+    showModal('✏️', 'Manual Mode ON', 'You can now type your entry quantities directly. Auto-sync from Dance Entries is paused. Click Manual Mode again to turn it off.');
+  }
+}
+
+function exportEntriesPDF() {
+  const d = getStudioData(currentStudio, currentComp);
+  const divisions = getDivisionsForComp(currentComp);
+  const today = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+  let grandTotal = 0;
+  const rows = divisions.map(div => {
+    const i = COMP_DIVISIONS.indexOf(div);
+    const s = d.compEntries[i] || {};
+    const vipQty = s.vipQty || 0;
+    const alcQty = s.alcQty || 0;
+    const vipT = vipQty * div.vip;
+    const alcT = alcQty * div.alc;
+    const rowTotal = vipT + alcT;
+    grandTotal += rowTotal;
+    if (!vipQty && !alcQty) return '';
+    return `<tr>
+      <td>${div.label}</td>
+      <td style="text-align:center">${vipQty || '—'}</td>
+      <td style="text-align:center">$${div.vip}</td>
+      <td style="text-align:center">${alcQty || '—'}</td>
+      <td style="text-align:center">$${div.alc}</td>
+      <td style="text-align:right;font-weight:600">$${rowTotal.toFixed(2)}</td>
+    </tr>`;
+  }).filter(Boolean).join('');
+
+  // Add override if set
+  const overrideTotal = d.entryOverride || 0;
+  const displayTotal = overrideTotal > 0 ? overrideTotal : grandTotal;
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+  <title>Entry Summary — ${currentStudio}</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:Arial,sans-serif; padding:0.75in; color:#111; }
+    h1 { font-size:18pt; margin-bottom:4px; }
+    .sub { font-size:10pt; color:#555; margin-bottom:0.4in; }
+    table { width:100%; border-collapse:collapse; font-size:10pt; }
+    th { background:#1a1a1a; color:#fff; padding:6px 10px; text-align:left; font-size:9pt; letter-spacing:0.05em; }
+    td { padding:6px 10px; border-bottom:1px solid #eee; }
+    tr:nth-child(even) td { background:#f9f9f9; }
+    .total-row td { background:#1a1a1a!important; color:#fff; font-weight:700; font-size:11pt; }
+    .footer { margin-top:0.4in; font-size:8pt; color:#aaa; text-align:center; }
+    @media print { @page { size:letter; margin:0; } body { padding:0.5in; } }
+  </style>
+</head><body>
+  <h1>Summary of Entries</h1>
+  <div class="sub">
+    <strong>${currentStudio}</strong> &nbsp;·&nbsp; ${currentComp} &nbsp;·&nbsp; Generated ${today}
+  </div>
+  <table>
+    <thead><tr>
+      <th>Division</th>
+      <th style="text-align:center"># VIP</th>
+      <th style="text-align:center">VIP Rate</th>
+      <th style="text-align:center"># ALC</th>
+      <th style="text-align:center">ALC Rate</th>
+      <th style="text-align:right">Total</th>
+    </tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:1rem">No entries entered yet.</td></tr>'}</tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td colspan="5" style="text-align:right;letter-spacing:0.1em;font-size:9pt">TOTAL ENTRY FEES</td>
+        <td style="text-align:right">$${displayTotal.toFixed(2)}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="footer">Fred Astaire Dance Studios Illinois &nbsp;·&nbsp; ${currentComp}</div>
+  <script>setTimeout(()=>window.print(),400);<\\/script>
+</body></html>`);
+  w.document.close();
+}
+
 function syncDanceEntriesToCompEntries(d) {
+  if (_manualEntryMode) return; // manual mode — don't overwrite
   if (!d.danceEntries || !d.danceEntries.length) return;
   if (!d.compEntries) d.compEntries = [];
 
