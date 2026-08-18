@@ -1257,23 +1257,23 @@ async function loadState() {
 // Track which studio::comp combos have been loaded
 const _loadedKeys = new Set();
 
-async function ensureStudioLoaded(studio, comp) {
+async function ensureAllStudiosLoaded(comp, forceReload = false) {
+  const allStudios = getAllStudiosForComp(comp);
+  const toLoad = forceReload
+    ? allStudios  // reload everything
+    : allStudios.filter(s => !_loadedKeys.has(s + '::' + comp));
+  if (!toLoad.length) return;
+  await Promise.all(toLoad.map(s => ensureStudioLoaded(s, comp, forceReload)));
+}
+
+async function ensureStudioLoaded(studio, comp, forceReload = false) {
   const key = studio + '::' + comp;
-  if (_loadedKeys.has(key)) return; // already loaded this session
+  if (!forceReload && _loadedKeys.has(key)) return;
   try {
     const val = await fbGet('studioData::' + key);
     if (val) appState.data[key] = JSON.parse(val);
     _loadedKeys.add(key);
   } catch(e) { console.error('ensureStudioLoaded error', key, e); }
-}
-
-async function ensureAllStudiosLoaded(comp) {
-  // Load all studios for a given comp — used by organizer overview/meal totals etc.
-  const allStudios = getAllStudiosForComp(comp);
-  const toLoad = allStudios.filter(s => !_loadedKeys.has(s + '::' + comp));
-  if (!toLoad.length) return;
-  // Load in parallel for speed
-  await Promise.all(toLoad.map(s => ensureStudioLoaded(s, comp)));
 }
 
 async function saveState() {
@@ -2742,7 +2742,8 @@ function getCompData(comp) {
 
 async function renderOverview() {
   const comp = document.getElementById('orgCompSelect').value;
-  await ensureAllStudiosLoaded(comp);
+  // Always force-reload fresh data from Firebase — never use stale cache
+  await ensureAllStudiosLoaded(comp, true);
   const data = getCompData(comp);
 
   for (const d of data) {
