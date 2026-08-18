@@ -1323,9 +1323,9 @@ async function saveState() {
                                    ((existingData.tickets||[]).filter(r=>r.name).length);
             const newPeople = ((d.vip||[]).filter(r=>r.name).length) +
                               ((d.tickets||[]).filter(r=>r.name).length);
-            if (newPeople < existingPeople) {
+            if (newPeople === 0 && existingPeople > 0) {
               console.warn('Blocked save for', key, '— would reduce people from', existingPeople, 'to', newPeople);
-              continue; // skip this save — would lose data
+              continue; // only block if completely empty
             }
           }
         } catch(e) { /* if read fails, proceed with save */ }
@@ -2412,9 +2412,9 @@ async function saveAll() {
       '<strong>Meal Choices Missing — please update:</strong><br><br>' +
       issues.map(x => `• ${x}`).join('<br>')
     );
-    // Still save — just warn
   }
   await saveState();
+  showSaveBanner();
 }
 
 async function showBalancePopupIfOwed(studio, comp) {
