@@ -1223,17 +1223,17 @@ async function loadState() {
   appState.visitingStudios = appState.visitingStudios.filter(v => !appState.studios.includes(v.name));
   if (!appState.data) appState.data = {};
 
-  // Load ALL studio data upfront — reliable, no stale cache issues
+  // Load ALL studio data upfront — sequential to prevent silent failures
   const allCombos = [];
   appState.studios.forEach(s => appState.competitions.forEach(c => allCombos.push(s + '::' + c)));
   (appState.visitingStudios||[]).forEach(v => { if(!allCombos.includes(v.name+'::'+v.comp)) allCombos.push(v.name+'::'+v.comp); });
-  await Promise.all(allCombos.map(async key => {
+  for (const key of allCombos) {
     try {
       const val = await fbGet('studioData::' + key);
       if (val) appState.data[key] = JSON.parse(val);
       _loadedKeys.add(key);
-    } catch(e) {}
-  }));
+    } catch(e) { console.warn('Failed to load', key, e); }
+  }
 
   _isLoading = false;
   await loadSeatingData();
