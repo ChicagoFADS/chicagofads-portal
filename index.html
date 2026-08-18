@@ -1294,10 +1294,42 @@ async function saveState() {
       visitingStudios: appState.visitingStudios
     };
     await fbSet('appState', JSON.stringify(config));
-    // Save each studio's data as its own Firebase document
+    // Only save data for active competitions — skip completed ones
+    const activeComps = ['DanceSport Challenge 2026', 'Holiday Star Ball 2026'];
+    
+    // Save each studio's data — but ONLY if it has actual people/content
     for (const key of Object.keys(appState.data)) {
-      if (appState.data[key] && Object.keys(appState.data[key]).length) {
-        await saveWithBackup('studioData::' + key, JSON.stringify(appState.data[key]));
+      const d = appState.data[key];
+      if (!d) continue;
+      
+      // Skip old/completed competitions
+      const keyComp = key.split('::').slice(1).join('::');
+      if (!activeComps.some(c => key.includes(c))) continue;
+      
+      // Skip empty data — never overwrite real data with empty arrays
+      const hasData = (d.vip && d.vip.some(r => r.name)) ||
+                      (d.tickets && d.tickets.some(r => r.name)) ||
+                      (d.meals && d.meals.some(r => r.name)) ||
+                      (d.compEntries && d.compEntries.some(r => r.vipQty || r.alcQty)) ||
+                      (d.danceEntries && d.danceEntries.length > 0) ||
+                      (d.requests && d.requests.length > 0);
+      if (hasData) {
+        // Read-before-write protection — never overwrite Firebase with fewer people
+        try {
+          const existing = await fbGet('studioData::' + key);
+          if (existing) {
+            const existingData = JSON.parse(existing);
+            const existingPeople = ((existingData.vip||[]).filter(r=>r.name).length) +
+                                   ((existingData.tickets||[]).filter(r=>r.name).length);
+            const newPeople = ((d.vip||[]).filter(r=>r.name).length) +
+                              ((d.tickets||[]).filter(r=>r.name).length);
+            if (newPeople < existingPeople) {
+              console.warn('Blocked save for', key, '— would reduce people from', existingPeople, 'to', newPeople);
+              continue; // skip this save — would lose data
+            }
+          }
+        } catch(e) { /* if read fails, proceed with save */ }
+        await saveWithBackup('studioData::' + key, JSON.stringify(d));
       }
     }
     showSaveBanner();
