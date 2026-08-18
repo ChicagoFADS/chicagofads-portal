@@ -1297,7 +1297,7 @@ async function saveState() {
     // Save each studio's data as its own Firebase document
     for (const key of Object.keys(appState.data)) {
       if (appState.data[key] && Object.keys(appState.data[key]).length) {
-        await fbSet('studioData::' + key, JSON.stringify(appState.data[key]));
+        await saveWithBackup('studioData::' + key, JSON.stringify(appState.data[key]));
       }
     }
     showSaveBanner();
@@ -3292,6 +3292,15 @@ function renderAdminTab() {
   ];
 
   el.innerHTML = `
+    <div class="section-card" style="margin-bottom:1.5rem;border-top:3px solid #27ae60;background:#f0fff4">
+      <div class="section-header">
+        <div class="section-title">💾 Backup Manager</div>
+        <button class="btn btn-sm" style="width:auto;background:#27ae60;color:#fff" onclick="showBackupManager()">View &amp; Restore Backups</button>
+      </div>
+      <div class="section-body">
+        <p style="font-size:0.7rem;color:var(--muted);line-height:1.6">Every save now automatically creates a timestamped backup. Use this to restore any studio's data to a previous point in time if anything goes wrong.</p>
+      </div>
+    </div>
     <div class="section-card" style="margin-bottom:1.5rem;border-top:3px solid var(--gold);background:#fffbf0">
       <div class="section-header">
         <div class="section-title">🎯 Active Competition</div>
@@ -4953,7 +4962,7 @@ async function loadLongGroveData() {
 
   appState.data[key] = data;
   // Save directly to Firebase as its own document
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Long Grove data loaded! 14 VIPs, 4 ALC tickets, 13 ALC meals, all entries imported.');
   renderAdminTab();
@@ -5021,7 +5030,7 @@ async function loadBrookfieldData() {
   // idx14 Pro Open @60 (Olivas/Slabach #107)
   data.compEntries[14] = { vipQty:0,   alcQty:1   };
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Brookfield loaded! 1 VIP, 8 ALC, 153 entries, $10,681 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5086,7 +5095,7 @@ async function loadBurrRidgeData() {
   //        + AC[Ellie](6) + AC[Ty](6) = 107
   data.compEntries[0]  = { vipQty:148, alcQty:107 }; // Pro/Am single
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Burr Ridge loaded! 5 VIPs, 3 ALC (Bucek, Honeycutt, Iris Nedelcu), 315 entries, $19,194 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5138,7 +5147,7 @@ async function loadDoylestownData() {
   // Champ 5-dance @$125vip: Ferris/Kol(1 L-B #50)+Laj/Kol(1 L-C+ #58 Int.Latin)+Stone/Kol(1 L-SR #50) = 3
   data.compEntries[6]  = { vipQty:3,   alcQty:0 }; // Champ 5-dance (Rhythm/Latin Open Champ 5-dance)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Doylestown loaded! 9 VIPs, 1 ALC (Semka), 304 entries, $19,504 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5157,7 +5166,7 @@ async function loadFortWayneNorthData() {
   // Fort Wayne North: 2 pros, 4 closed pro events @60 each (#101,102,103,105)
   data.compEntries[13] = { vipQty:0, alcQty:4 }; // Pro Closed @60
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Fort Wayne North loaded! 2 pros, 4 closed entries ($240).');
   renderAdminTab(); renderPaymentsTable();
@@ -5178,7 +5187,7 @@ async function loadFortWayneSouthData() {
   data.compEntries[13] = { vipQty:0, alcQty:4 }; // Pro Closed @60
   data.compEntries[14] = { vipQty:0, alcQty:1 }; // Pro Open @60
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Fort Wayne South loaded! 4 pros, 4 closed + 1 open entries ($300).');
   renderAdminTab(); renderPaymentsTable();
@@ -5241,7 +5250,7 @@ async function loadGlenEllynData() {
   // idx13 Professional Closed @60 (Chernavin/Barabash #102, #103, #106)
   data.compEntries[13] = { vipQty:3,   alcQty:0   };
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   // Log the $15,000 payment
   const pmtKey = 'payments::' + studio + '::' + comp;
   const payments = [{ amount:15000, note:'Cash/Zelle 05/14/26', date:'5/14/2026' }];
@@ -5268,7 +5277,7 @@ async function loadLakeviewData() {
     compEntries: Array(15).fill({}).map(()=>({vipQty:0,alcQty:0}))
   };
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Lakeview loaded! 4 ALC Saturday Dinner & Session ($560 total).');
   renderAdminTab(); renderPaymentsTable();
@@ -5298,7 +5307,7 @@ async function loadGreenfieldData() {
   data.compEntries[4] = { vipQty:0, alcQty:1  }; // Championship 3-dance
   data.compEntries[9] = { vipQty:0, alcQty:1  }; // Showcase
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Greenfield loaded! 3 ALC ticket holders, 11 entries ($1,259 total).');
   renderAdminTab(); renderPaymentsTable();
@@ -5328,7 +5337,7 @@ async function loadLasSendasData() {
   data.compEntries[5]  = { vipQty:9,  alcQty:0 }; // Championship 4-dance (6 Hustler + 3 Orne #49)
   data.compEntries[6]  = { vipQty:3,  alcQty:0 }; // Championship 5-dance (Orne #50 rhythm)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Las Sendas loaded! 4 VIP Full Packages, 99 entries ($7,715 total).');
   renderAdminTab(); renderPaymentsTable();
@@ -5350,7 +5359,7 @@ async function loadMilwaukeeData() {
   // Map as Championship 4-dance ALC entries
   data.compEntries[5] = { vipQty:0, alcQty:4 }; // 4 multi-dance entries
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Milwaukee loaded! 2 competitors, 4 multi-dance entries ($240 total).');
   renderAdminTab(); renderPaymentsTable();
@@ -5384,7 +5393,7 @@ async function loadMokenaData() {
   data.compEntries[6] = { vipQty:1,   alcQty:0   }; // Champ 5-dance @125vip (McQuown/Polivka SR#50)
   data.compEntries[9] = { vipQty:1,   alcQty:1   }; // Showcase @115vip/#74S + @118alc/#74B
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Mokena loaded! 3 VIPs, 2 ALC, 207 entries, $11,930 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5443,7 +5452,7 @@ async function loadNorthbrookData() {
   data.compEntries[8] = { vipQty:1,   alcQty:0   }; // Novelty @110vip (Wikrent#73B)
   data.compEntries[9] = { vipQty:2,   alcQty:0   }; // Showcase @115vip (Wikrent#74B, Winter#74S)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   // Record $90 credit from Mini Match 2026 overpayment as negative payment
   const pmtKey = 'payments::' + studio + '::' + comp;
   const payments = [{ amount:-90, note:'Credit — Mini Match 2026 overpayment', date:'5/7/2026' }];
@@ -5492,7 +5501,7 @@ async function loadOakCreekData() {
   data.compEntries[6]  = { vipQty:2,  alcQty:1  }; // Champ 5-dance @125vip (B#50,B+#50) / @128alc (Toledo AC-C#50)
   data.compEntries[14] = { vipQty:0,  alcQty:1  }; // Pro Open @60 (Shapko/Beetz #107)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Oak Creek loaded! 1 VIP, 4 ALC, 64 entries, $5,559 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5531,7 +5540,7 @@ async function loadOrangeData() {
   data.compEntries[4]  = { vipQty:0, alcQty:1   }; // Champ 3-dance @108alc (Robert/St.George SR#43)
   data.compEntries[13] = { vipQty:0, alcQty:2   }; // Pro Closed @60 (Pavlovic/St.George #102+#103)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Orange loaded! 4 ALC, 166 entries, $8,398 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5563,7 +5572,7 @@ async function loadParkRidgeData() {
   data.compEntries[4] = { vipQty:8,   alcQty:0 }; // Champ 3-dance @105vip
   data.compEntries[8] = { vipQty:2,   alcQty:0 }; // Novelty @110vip (Mike #73B x2)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   // Record payments and credit
   const pmtKey = 'payments::' + studio + '::' + comp;
   const payments = [
@@ -5601,7 +5610,7 @@ async function loadPensacolaData() {
   data.compEntries[3] = { vipQty:2,   alcQty:0 }; // Champ 2-dance @95vip (SR+#66S, SR-E#66S)
   data.compEntries[4] = { vipQty:6,   alcQty:0 }; // Champ 3-dance @105vip (SR+#45,SR-E#45,SR+#46,SR-E#46,SR+#65S,SR-E#65S)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Pensacola loaded! 2 VIPs, 185 entries, $9,113 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5642,7 +5651,7 @@ async function loadPewaukeeData() {
   data.compEntries[13] = { vipQty:0,   alcQty:2 }; // Pro Closed @60 (Pohl/Suprunenko)
   data.compEntries[14] = { vipQty:0,   alcQty:1 }; // Pro Open @60 (Rychkov/Cook)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Pewaukee loaded! 8 VIPs, 394 entries, $22,911 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5707,7 +5716,7 @@ async function loadPleasantPrairieData() {
   data.compEntries[9]  = { vipQty:0, alcQty:2   }; // Showcase @118alc
   data.compEntries[14] = { vipQty:0, alcQty:2   }; // Pro Open @60 (Berezhnyi/Hagen, Ivanov/Triliegi)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Pleasant Prairie loaded! 16 ALC, 412 entries, $25,488 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5744,7 +5753,7 @@ async function loadScherervilleData() {
   data.compEntries[0] = { vipQty:64, alcQty:36 }; // Pro/Am Single @39vip/@42alc
   data.compEntries[4] = { vipQty:2,  alcQty:1  }; // Champ 3-dance @105vip (Sterna B#43+B#44) / @108alc (Kwiatt B+#43)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Schererville loaded! 6 VIPs, 1 ALC, 103 entries, $8,960 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5801,7 +5810,7 @@ async function loadSouthBarringtonData() {
   data.compEntries[8]  = { vipQty:1,  alcQty:2  }; // Novelty @110vip (JY/BY AC-T#73B) / @113alc (Luckring,Weinberg)
   data.compEntries[13] = { vipQty:0,  alcQty:1  }; // Pro Closed @60 (Thomas/Spatharakis)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   // Record $6,000 payment
   const pmtKey = 'payments::' + studio + '::' + comp;
   const payments = [{ amount:6000, note:'Check/Zelle 5173615864', date:'5/7/2026' }];
@@ -5850,7 +5859,7 @@ async function loadStCharlesData() {
   // 1 entry: Zakharchenko/Rozdabara #109 Open Int. Latin @60 -> Pro Open
   data.compEntries[14] = { vipQty:0, alcQty:1 };
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ St. Charles loaded! 11 ALC (sat dinner only), 1 pro entry, $1,600 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5879,7 +5888,7 @@ async function loadWestBloomfieldData() {
   data.compEntries[4] = { vipQty:6,   alcQty:0 }; // Champ 3-dance @105vip (SR/SR+#45,#46,#53)
   data.compEntries[6] = { vipQty:2,   alcQty:0 }; // Champ 5-dance @125vip (SR/SR+ Astaire Open Ballroom)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ West Bloomfield loaded! 2 VIPs, 275 entries, $12,683 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5921,7 +5930,7 @@ async function loadWestLoopData() {
   data.compEntries[6]  = { vipQty:2,   alcQty:0 }; // Champ 5-dance @125vip (Pena A#50 + ADS rhythm)
   data.compEntries[13] = { vipQty:0,   alcQty:2 }; // Pro Closed @60 (Gabehart/Vivsyana #102+#103)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ West Loop loaded! 7 VIPs, 2 ALC spectators, 276 entries, $16,469 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -5975,7 +5984,7 @@ async function loadWilmetteData() {
   // Novelty: Michelle/Rafael(1) @$110vip (L-T #73B "Cafe con Ron")
   data.compEntries[8]  = { vipQty:1,   alcQty:0   }; // Novelty @$110vip (Torres/Mealing #73B "Cafe con Ron")
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Wilmette loaded! 3 VIPs (Mary Josephs, Michelle Mealing, Rafael Torres), 3 ALC (Ellie Homan, Karen Reyes, Jake Thomas), 249 entries, $14,140 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -6009,7 +6018,7 @@ async function loadClearwaterData() {
   // Champ 4-dance: Buckner/Aaron L-B #49 Smooth Open Champ (W/T/FT/VW) = 1 vip @$115
   data.compEntries[5] = { vipQty:1,  alcQty:0 };  // Champ 4-dance (Buckner/Aaron #49)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Clearwater loaded! 4 VIPs, 0 ALC, 82 entries, $6,120 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -6042,7 +6051,7 @@ async function loadGreenBaySouthData() {
   // 56 entries = $2,352 — verified. King=ALC pro → all ALC @$42. No champs.
   data.compEntries[0] = { vipQty:0, alcQty:56 }; // Pro/Am Single @$42alc
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Green Bay South loaded! 0 VIPs, 2 ALC (King, VanRossum), 56 entries, $3,307 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -6083,7 +6092,7 @@ async function loadMadisonWestData() {
   // Pro Open [14] @$60: Oleksandr/Babenko #106 Open Amer. Smooth = 1
   data.compEntries[14] = { vipQty:1,   alcQty:0 }; // Pro Open @$60 (Oleksandr/Babenko #106)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Madison West loaded! 3 VIPs, 1 ALC (Babenko), 211 entries, $10,899 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -6131,7 +6140,7 @@ async function loadMenomoneeFallsData() {
   // Solo [7] @$113alc: Nieman #72S Silver Solo "Let Me Be Your Star" = 1
   data.compEntries[7] = { vipQty:0,  alcQty:1   }; // Solo (Nieman #72S)
   appState.data[key] = data;
-  await fbSet('studioData::' + key, JSON.stringify(data));
+  await saveWithBackup('studioData::' + key, JSON.stringify(data));
   showSaveBanner();
   alert('✓ Menomonee Falls loaded! 0 VIPs, 4 ALC (Bieschke, Cadd, Modrzynski, Nieman), 197 entries, $10,332 total.');
   renderAdminTab(); renderPaymentsTable();
@@ -6550,6 +6559,66 @@ function printSeatingList(view) {
   <script>setTimeout(()=>window.print(),500);<\/script>
 </body></html>`);
   w.document.close();
+}
+
+// ── BACKUP SYSTEM ──
+const MAX_BACKUPS = 10;
+
+async function saveWithBackup(key, data) {
+  const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
+  await fbSet(key, dataStr);
+  try {
+    const backupKey = 'backup::' + key + '::' + Date.now();
+    await fbSet(backupKey, dataStr);
+    const indexKey = 'backupIndex::' + key;
+    const existing = await fbGet(indexKey);
+    const index = existing ? JSON.parse(existing) : [];
+    index.push({ key: backupKey, ts: Date.now(), time: new Date().toLocaleString() });
+    while (index.length > MAX_BACKUPS) index.shift();
+    await fbSet(indexKey, JSON.stringify(index));
+  } catch(e) { console.warn('Backup error:', e); }
+}
+
+async function getBackups(key) {
+  try {
+    const existing = await fbGet('backupIndex::' + key);
+    return existing ? JSON.parse(existing) : [];
+  } catch(e) { return []; }
+}
+
+async function restoreFromBackup(key, backupKey) {
+  if (!confirm('Restore this backup? Current data will be overwritten.')) return;
+  const data = await fbGet(backupKey);
+  if (!data) { alert('Backup not found.'); return; }
+  await fbSet(key, data);
+  // Reload the data
+  appState.data[key] = JSON.parse(data);
+  alert('✓ Restored! Refreshing...');
+  location.reload();
+}
+
+async function showBackupManager() {
+  const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
+  const allStudios = getAllStudiosForComp(comp);
+  let html = '<div style="max-height:60vh;overflow-y:auto">';
+  for (const studio of allStudios) {
+    const key = 'studioData::' + studio + '::' + comp;
+    const backups = await getBackups(key);
+    if (!backups.length) continue;
+    html += `<div style="margin-bottom:1rem;padding:0.75rem;border:1px solid var(--border);border-radius:6px">
+      <div style="font-weight:700;color:var(--gold);margin-bottom:0.5rem">${studio}</div>
+      ${[...backups].reverse().map(b => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid var(--border);font-size:0.7rem">
+          <span style="color:var(--muted)">${b.time}</span>
+          <button onclick="restoreFromBackup('${key}','${b.key}')" style="background:#27ae60;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:0.65rem">↩ Restore</button>
+        </div>`).join('')}
+    </div>`;
+  }
+  html += '</div>';
+  document.getElementById('modalIcon').textContent = '💾';
+  document.getElementById('modalTitle').textContent = 'Backup Manager — ' + comp;
+  document.getElementById('modalBody').innerHTML = html || '<p style="color:var(--muted);font-size:0.75rem">No backups yet. Every save going forward creates one automatically.</p>';
+  document.getElementById('modalOverlay').style.display = 'flex';
 }
 
 // ─── REQUESTS SYSTEM ───
