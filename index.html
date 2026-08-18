@@ -1250,8 +1250,7 @@ async function loadState() {
       document.getElementById('headerName').textContent = currentUser.name;
       setTimeout(async () => {
         if (currentUser.type === 'organizer') {
-          showOrganizerView();
-          setTimeout(() => renderOverview(), 300);
+          showOrganizerView(); // already has setTimeout inside now
         } else {
           // Studio login: only load THIS studio's data for active comp
           await ensureStudioLoaded(currentUser.name, getActiveComp());
@@ -2701,7 +2700,8 @@ function showOrganizerView() {
   });
   setCompDropdown(sel);
 
-  renderOrgDashboard();
+  // Small delay to ensure dropdown value is set before rendering
+  setTimeout(() => renderOrgDashboard(), 100);
 }
 
 function renderOrgDashboard() {
