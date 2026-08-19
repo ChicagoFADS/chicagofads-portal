@@ -6598,16 +6598,24 @@ const MAX_BACKUPS = 10;
 
 async function saveWithBackup(key, data) {
   const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
-  await fbSet(key, dataStr);
+  // Write primary directly to Firebase (not through fbSet to avoid infinite loop)
+  try {
+    await waitForFirebase();
+    const ref = window._fbDoc(window._db, 'hub', key);
+    await window._fbSetDoc(ref, { value: dataStr });
+  } catch(e) { console.error('saveWithBackup primary error:', e); return; }
+  // Write backup
   try {
     const backupKey = 'backup::' + key + '::' + Date.now();
-    await fbSet(backupKey, dataStr);
+    const backupRef = window._fbDoc(window._db, 'hub', backupKey);
+    await window._fbSetDoc(backupRef, { value: dataStr });
     const indexKey = 'backupIndex::' + key;
-    const existing = await fbGet(indexKey);
-    const index = existing ? JSON.parse(existing) : [];
+    const indexRef = window._fbDoc(window._db, 'hub', indexKey);
+    const indexSnap = await window._fbGetDoc(indexRef);
+    const index = indexSnap.exists() ? JSON.parse(indexSnap.data().value) : [];
     index.push({ key: backupKey, ts: Date.now(), time: new Date().toLocaleString() });
     while (index.length > MAX_BACKUPS) index.shift();
-    await fbSet(indexKey, JSON.stringify(index));
+    await window._fbSetDoc(indexRef, { value: JSON.stringify(index) });
   } catch(e) { console.warn('Backup error:', e); }
 }
 
