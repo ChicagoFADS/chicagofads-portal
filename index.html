@@ -802,6 +802,7 @@
       <button class="btn btn-sm" style="width:auto;margin-top:0;background:var(--gold);color:var(--black)" onclick="generateRegistrationPDF(currentStudio, currentComp)">📄 Generate Registration PDF</button>
     </div>
     <div id="deadlineBanner"></div>
+    <div id="lockBannerArea"></div>
 
     <!-- TABS -->
     <div class="tabs">
@@ -1179,7 +1180,10 @@ async function fbGet(key) {
     const ref = window._fbDoc(window._db, 'hub', key);
     const snap = await window._fbGetDoc(ref);
     return snap.exists() ? snap.data().value : null;
-  } catch(e) { console.error('fbGet error', e); return null; }
+  } catch(e) {
+    console.error('fbGet error', e);
+    return undefined; // undefined = fetch FAILED (network/timeout). null = confirmed no data exists in Firestore.
+  }
 }
 
 async function fbSet(key, value) {
@@ -1199,6 +1203,7 @@ async function fbDelete(key) {
 }
 
 let _isLoading = false;
+let _intentionalStudioRemoval = false; // set true only inside removeStudio() so the guard below doesn't block a deliberate removal
 
 async function loadState() {
   _isLoading = true;
@@ -1233,8 +1238,12 @@ async function loadState() {
   for (const key of allCombos) {
     try {
       const val = await fbGet('studioData::' + key);
-      if (val) appState.data[key] = JSON.parse(val);
-      _loadedKeys.add(key);
+      if (val !== undefined) {
+        // Success — real data, or confirmed-empty from Firestore
+        if (val) appState.data[key] = JSON.parse(val);
+        _loadedKeys.add(key);
+      }
+      // val === undefined means this fetch failed — leave it un-loaded so ensureStudioLoaded retries when that studio is actually opened
     } catch(e) { console.warn('Failed to load', key, e); }
   }
 
@@ -1278,17 +1287,43 @@ async function ensureAllStudiosLoaded(comp, forceReload = false) {
 
 async function ensureStudioLoaded(studio, comp, forceReload = false) {
   const key = studio + '::' + comp;
-  if (!forceReload && _loadedKeys.has(key)) return;
-  try {
+  if (!forceReload && _loadedKeys.has(key)) return true;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const val = await fbGet('studioData::' + key);
-    if (val) appState.data[key] = JSON.parse(val);
-    _loadedKeys.add(key);
-  } catch(e) { console.error('ensureStudioLoaded error', key, e); }
+    if (val !== undefined) {
+      // Success — val is real saved data, or null meaning Firestore confirms nothing exists yet (genuinely new/empty studio)
+      if (val) appState.data[key] = JSON.parse(val);
+      _loadedKeys.add(key);
+      return true;
+    }
+    // val === undefined means the fetch itself failed (network/timeout) — retry rather than treating this as "empty"
+    console.warn('ensureStudioLoaded: attempt', attempt, 'failed for', key);
+    if (attempt < maxAttempts) await new Promise(r => setTimeout(r, 700));
+  }
+  console.error('ensureStudioLoaded: all attempts failed for', key, '— refusing to show a blank form');
+  return false;
 }
 
 async function saveState() {
   if (_isLoading) return; // never save while loading — would overwrite fresh Firebase data
   try {
+    // Guard against a stale/incomplete in-memory studios list silently shrinking the shared roster config
+    // (same read-before-write philosophy already used for studio data below — this just applies it to the studios list too)
+    if (!_intentionalStudioRemoval) {
+      try {
+        const existingConfigStr = await fbGet('appState');
+        if (existingConfigStr !== undefined) {
+          const existingConfig = existingConfigStr ? JSON.parse(existingConfigStr) : null;
+          const existingStudios = (existingConfig && Array.isArray(existingConfig.studios)) ? existingConfig.studios : [];
+          if (existingStudios.length > 0 && appState.studios.length < existingStudios.length) {
+            console.warn('Blocked a save that would have shrunk the studios list from', existingStudios.length, 'to', appState.studios.length, '— keeping the fuller saved list instead.');
+            appState.studios = existingStudios;
+          }
+        }
+      } catch(e) { console.warn('Studios-list guard check failed, proceeding without it:', e); }
+    }
+
     const config = {
       studios: appState.studios,
       competitions: appState.competitions,
@@ -1537,7 +1572,15 @@ function setCompDropdown(sel) {
 }
 
 async function showStudioView(studioName) {
-  await ensureStudioLoaded(studioName, getActiveComp());
+  const loadedOk = await ensureStudioLoaded(studioName, getActiveComp());
+  if (!loadedOk) {
+    showModal('⚠️', 'Connection Problem',
+      'We could not confirm your saved data loaded correctly — this is usually a spotty connection, not lost data. ' +
+      '<strong>Please do NOT enter anything yet.</strong><br><br>' +
+      '<button class="btn" onclick="location.reload()">🔄 Reload &amp; Try Again</button>'
+    );
+    return;
+  }
   document.getElementById('studioView').style.display = 'block';
   document.getElementById('organizerView').style.display = 'none';
   document.getElementById('studioTitle').textContent = studioName;
@@ -1576,7 +1619,16 @@ async function openOrgStudioEditor() {
 
   currentStudio = studio;
   currentComp = sel.value;
-  await ensureStudioLoaded(studio, currentComp);
+  const loadedOk = await ensureStudioLoaded(studio, currentComp);
+  if (!loadedOk) {
+    document.getElementById('studioView').style.display = 'none';
+    document.getElementById('organizerView').style.display = 'block';
+    showModal('⚠️', 'Connection Problem',
+      'Could not confirm ' + studio + '\'s data loaded correctly — this is usually a spotty connection, not lost data. ' +
+      '<strong>Please do not edit anything yet.</strong> Try again in a moment.'
+    );
+    return;
+  }
   loadStudioData();
 
   // Notify if this studio has unreviewed changes
@@ -1625,6 +1677,7 @@ function loadStudioData() {
   renderVipTable(d.vip);
   renderPeopleList(d);
   renderCompEntriesTable(d.compEntries);
+  renderLockBanner();
   initEntryMode();
   if (currentUser && currentUser.type === 'studio') {
     setTimeout(() => showBalancePopupIfOwed(currentStudio, currentComp), 800);
@@ -1690,6 +1743,7 @@ function updateVipTotal() {
 }
 
 function addVipRow() {
+  if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   const isStudioAdd = currentUser && currentUser.type === 'studio';
   d.vip.push({ needsReview: isStudioAdd });
@@ -1942,6 +1996,7 @@ function flagForReview(d, i) {
 }
 
 function updatePersonName(i, val) {
+  if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   if (d.tickets[i]) d.tickets[i].name = val;
   if (d.meals[i])   d.meals[i].name   = val;
@@ -1950,6 +2005,7 @@ function updatePersonName(i, val) {
 }
 
 function updatePersonTicket(i, field, val) {
+  if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   if (!d.tickets[i]) return;
   d.tickets[i][field] = val;
@@ -2071,6 +2127,7 @@ function updatePeopleTotals(d) {
 }
 
 function addPersonRow() {
+  if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   const isStudioAdd = currentUser && currentUser.type === 'studio';
   d.tickets.push({ name:'', proam:'', vipAlc:'ALC', firstTimer:false, compFee:false, thuMat:false, thuEve:false, friMat:false, friEve:false, satMat:false, gift:false, needsReview:isStudioAdd });
@@ -2089,6 +2146,7 @@ function addPersonRow() {
 }
 
 function removePersonRow(i) {
+  if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   d.tickets.splice(i, 1);
   d.meals.splice(i, 1);
@@ -2264,6 +2322,7 @@ function renderCompEntriesTable(saved) {
 }
 
 function updateCompEntry(idx, field, value) {
+  if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   if (!d.compEntries[idx]) d.compEntries[idx] = {};
   d.compEntries[idx][field] = value;
@@ -2345,6 +2404,7 @@ function checkMealChoice(i) {
 // ── GENERIC ROW UPDATER ──
 
 function updateRow(section, index, field, value) {
+  if (section !== 'meals' && lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   if (!d[section][index]) d[section][index] = {};
   d[section][index][field] = value;
@@ -2362,11 +2422,214 @@ function updateRow(section, index, field, value) {
 }
 
 function removeRow(section, index) {
+  if (section !== 'meals' && lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   d[section].splice(index, 1);
   if (section === 'vip') renderVipTable(d.vip);
   if (section === 'tickets' || section === 'meals') renderPeopleList(d);
   triggerAutoSave();
+}
+
+// ── LOCK / SUBMIT SYSTEM ──
+// Locking covers VIP, ALC roster (tickets), competition entries, and dance entries.
+// Meal choices, dietary notes, and session flags in d.meals stay editable even while locked,
+// since banquet selections come in on a rolling basis after the roster is finalized.
+// Organizer (currentUser.type !== 'studio') always bypasses the lock.
+
+function lockBlocksEdit() {
+  if (!currentUser || currentUser.type !== 'studio') return false;
+  const d = getStudioData(currentStudio, currentComp);
+  return !!d.locked;
+}
+
+function showLockedNotice() {
+  showModal('🔒', 'This Section is Locked',
+    'Your roster was submitted and locked. To make a change, click "Request to Edit" at the top of the page first.<br><br>' +
+    'Meal choices and dietary notes can still be updated anytime, even while locked.'
+  );
+}
+
+function getStudioBreakdownSnapshot(studio, comp) {
+  try {
+    const rows = getCompData(comp);
+    const row = rows.find(r => r.studio === studio);
+    if (!row) return null;
+    return {
+      vipCount: row.vipCount, ticketHolders: row.ticketHolders, mealPkgs: row.mealPkgs,
+      welcomeGifts: row.welcomeGifts, totalEntries: row.totalEntries,
+      mealCounts: row.mealCounts, sessions: row.sessions
+    };
+  } catch(e) { console.error('getStudioBreakdownSnapshot error', e); return null; }
+}
+
+async function logActivityEvent(studio, comp, type, actor) {
+  try {
+    const feedKey = 'lockActivity::' + comp;
+    const existing = await fbGet(feedKey);
+    const feed = (existing) ? JSON.parse(existing) : [];
+    feed.unshift({ studio, comp, type, actor, at: new Date().toLocaleString(), ts: Date.now(),
+                   snapshot: getStudioBreakdownSnapshot(studio, comp) });
+    while (feed.length > 300) feed.pop();
+    await fbSet(feedKey, JSON.stringify(feed));
+  } catch(e) { console.error('logActivityEvent error', e); }
+}
+
+async function lockStudioRoster(studio, comp, actor) {
+  const key = studio + '::' + comp;
+  const d = getStudioData(studio, comp);
+  d.locked = true;
+  d.lockedAt = new Date().toLocaleString();
+  d.lockedBy = actor;
+  await saveWithBackup('studioData::' + key, JSON.stringify(d));
+  await logActivityEvent(studio, comp, 'locked', actor);
+}
+
+async function unlockStudioRoster(studio, comp, actor) {
+  const key = studio + '::' + comp;
+  const d = getStudioData(studio, comp);
+  d.locked = false;
+  d.unlockedAt = new Date().toLocaleString();
+  d.unlockedBy = actor;
+  await saveWithBackup('studioData::' + key, JSON.stringify(d));
+  await logActivityEvent(studio, comp, 'unlocked', actor);
+}
+
+async function submitMealUpdate(studio, comp, actor) {
+  // Log-only event, used after a meal-related change while roster stays locked
+  await logActivityEvent(studio, comp, 'meal_updated', actor);
+}
+
+function requestEditUnlock() {
+  const d = getStudioData(currentStudio, currentComp);
+  if (!d.locked) return;
+  showModal('🔓', 'Request to Edit',
+    `This will unlock <strong>${currentStudio}</strong>'s roster for <strong>${currentComp}</strong> so you can make changes. ` +
+    `The organizer will see this change. When you're done, click "Done Editing / Re-Lock" to lock it again.<br><br>` +
+    `<button class="btn" onclick="closeModal(); confirmUnlockAndProceed();">Unlock &amp; Edit</button> ` +
+    `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>`
+  );
+}
+
+async function confirmUnlockAndProceed() {
+  await unlockStudioRoster(currentStudio, currentComp, currentStudio);
+  loadStudioData();
+}
+
+function submitAndLockRoster() {
+  showModal('🔒', 'Submit &amp; Lock',
+    `This locks <strong>${currentStudio}</strong>'s VIP list, ALC roster, competition entries, and dance entries for <strong>${currentComp}</strong>. ` +
+    `You can still add or update meal choices anytime after this. To change anything else, you'll need to click "Request to Edit."<br><br>` +
+    `<button class="btn" onclick="closeModal(); confirmLockAndProceed();">Submit &amp; Lock</button> ` +
+    `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>`
+  );
+}
+
+async function confirmLockAndProceed() {
+  await lockStudioRoster(currentStudio, currentComp, currentStudio);
+  loadStudioData();
+}
+
+async function relockRoster() {
+  await lockStudioRoster(currentStudio, currentComp, currentStudio);
+  loadStudioData();
+}
+
+function renderLockBanner() {
+  const el = document.getElementById('lockBannerArea');
+  if (!el) return;
+  const d = getStudioData(currentStudio, currentComp);
+  if (!currentUser || currentUser.type !== 'studio') { el.innerHTML = ''; return; }
+  if (d.locked) {
+    el.innerHTML = `<div style="background:#fff4e5;border:1px solid var(--gold);border-radius:6px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+      <span style="font-size:0.8rem"><strong>🔒 Locked</strong> — submitted ${d.lockedAt||''}. Meal choices can still be added below.</span>
+      <button class="btn btn-sm btn-outline" style="width:auto;margin:0" onclick="requestEditUnlock()">Request to Edit</button>
+    </div>`;
+  } else {
+    el.innerHTML = `<div style="background:#f0fff4;border:1px solid var(--green);border-radius:6px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+      <span style="font-size:0.8rem">Once your roster is complete, submit it to lock it in.</span>
+      <button class="btn btn-sm btn-success" style="width:auto;margin:0" onclick="submitAndLockRoster()">✓ Submit &amp; Lock Roster</button>
+    </div>`;
+  }
+}
+
+// ── ADMIN: LOCK MANAGER + ACTIVITY FEED ──
+
+async function renderLockManager() {
+  const el = document.getElementById('lockManagerArea');
+  if (!el) return;
+  const compSel = document.getElementById('activeCompSelect');
+  const comp = (compSel && compSel.value) ? compSel.value : (appState.activeComp || getDefaultComp());
+  const studios = getAllStudiosForComp(comp);
+  const lockStates = studios.map(s => {
+    const d = getStudioData(s, comp);
+    return { studio: s, locked: !!d.locked, lockedAt: d.lockedAt };
+  });
+
+  let feed = [];
+  try {
+    const feedRaw = await fbGet('lockActivity::' + comp);
+    feed = feedRaw ? JSON.parse(feedRaw) : [];
+  } catch(e) { console.error('renderLockManager feed error', e); }
+
+  el.innerHTML = `
+    <div class="section-card" style="margin-bottom:1.5rem;border-top:3px solid var(--gold)">
+      <div class="section-header">
+        <div class="section-title">🔒 Roster Lock Manager — ${comp}</div>
+        <button class="btn btn-sm" style="width:auto;margin:0;background:var(--gold);color:var(--black)" onclick="bulkLockAllStudios('${comp}')">Lock All Unlocked</button>
+      </div>
+      <div class="section-body">
+        <p style="font-size:0.68rem;color:var(--muted);margin-bottom:1rem">Lock a studio's roster once it's final. Meal choices stay editable regardless of lock state.</p>
+        ${lockStates.map(s => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:#f5f0e8;border:1px solid var(--border);margin-bottom:0.4rem">
+            <span style="font-size:0.75rem;font-weight:600">${s.studio} ${s.locked?`<span style="color:var(--green)">🔒 Locked${s.lockedAt?' · '+s.lockedAt:''}</span>`:`<span style="color:var(--muted)">🔓 Unlocked</span>`}</span>
+            <button class="btn btn-sm ${s.locked?'btn-outline':'btn-success'}" style="width:auto;margin:0" onclick="${s.locked?`adminUnlockStudio('${s.studio.replace(/'/g,"\\'")}','${comp}')`:`adminLockStudio('${s.studio.replace(/'/g,"\\'")}','${comp}')`}">${s.locked?'Unlock':'Lock'}</button>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="section-card" style="margin-bottom:1.5rem;border-top:3px solid var(--gold)">
+      <div class="section-header">
+        <div class="section-title">📜 Activity Feed — ${comp}</div>
+        <span class="badge badge-gold">${feed.length} event${feed.length===1?'':'s'}</span>
+      </div>
+      <div class="section-body" style="max-height:500px;overflow-y:auto">
+        ${feed.length ? feed.slice(0,50).map(ev => `
+          <div style="padding:0.75rem;background:#f5f0e8;border:1px solid var(--border);margin-bottom:0.5rem;border-radius:6px">
+            <div style="font-size:0.75rem;font-weight:700">${ev.type==='locked'?'🔒':ev.type==='unlocked'?'🔓':'🍽️'} ${ev.studio} — ${(ev.type||'').replace('_',' ')}</div>
+            <div style="font-size:0.68rem;color:var(--muted);margin-bottom:0.5rem">${ev.at} · by ${ev.actor}</div>
+            ${ev.snapshot ? `
+            <div style="font-size:0.68rem;line-height:1.6">
+              VIPs: <strong>${ev.snapshot.vipCount}</strong> · ALC: <strong>${ev.snapshot.ticketHolders}</strong> · Welcome Gifts: <strong>${ev.snapshot.welcomeGifts}</strong> · Total Entries: <strong>${ev.snapshot.totalEntries}</strong><br>
+              Meals: ${Object.entries(ev.snapshot.mealCounts||{}).map(([k,v])=>`${k}: ${v}`).join(', ')||'—'}
+            </div>` : ''}
+          </div>`).join('') : '<p style="font-size:0.72rem;color:var(--muted)">No activity yet.</p>'}
+      </div>
+    </div>
+  `;
+}
+
+async function adminLockStudio(studio, comp) {
+  await lockStudioRoster(studio, comp, 'organizer');
+  renderLockManager();
+}
+async function adminUnlockStudio(studio, comp) {
+  await unlockStudioRoster(studio, comp, 'organizer');
+  renderLockManager();
+}
+function bulkLockAllStudios(comp) {
+  showModal('🔒', 'Lock All Unlocked Studios',
+    `This locks every studio's roster for <strong>${comp}</strong> that isn't already locked. Studios (or you) can still unlock individually afterward to make changes.<br><br>` +
+    `<button class="btn" onclick="closeModal(); confirmBulkLock('${comp}');">Lock All</button> ` +
+    `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>`
+  );
+}
+async function confirmBulkLock(comp) {
+  const studios = getAllStudiosForComp(comp);
+  for (const s of studios) {
+    const d = getStudioData(s, comp);
+    if (!d.locked) await lockStudioRoster(s, comp, 'organizer');
+  }
+  renderLockManager();
+  showModal('✓', 'Done', `All studios for ${comp} are now locked.`);
 }
 
 // ── SAVE ──
@@ -3293,38 +3556,9 @@ function setActiveComp() {
 function renderAdminTab() {
   const el = document.getElementById('adminContent');
 
-  // One-time data imports
-  const oneTimeImports = [
-    { label: 'Load Clearwater — Chicago Open 2026',       fn: 'loadClearwaterData' },
-    { label: 'Load Long Grove — Chicago Open 2026',       fn: 'loadLongGroveData' },
-    { label: 'Load Brookfield — Chicago Open 2026',       fn: 'loadBrookfieldData' },
-    { label: 'Load Burr Ridge — Chicago Open 2026',       fn: 'loadBurrRidgeData' },
-    { label: 'Load Doylestown — Chicago Open 2026',       fn: 'loadDoylestownData' },
-    { label: 'Load Fort Wayne North — Chicago Open 2026', fn: 'loadFortWayneNorthData' },
-    { label: 'Load Fort Wayne South — Chicago Open 2026', fn: 'loadFortWayneSouthData' },
-    { label: 'Load Glen Ellyn — Chicago Open 2026',       fn: 'loadGlenEllynData' },
-    { label: 'Load Green Bay South — Chicago Open 2026',  fn: 'loadGreenBaySouthData' },
-    { label: 'Load Lakeview — Chicago Open 2026',         fn: 'loadLakeviewData' },
-    { label: 'Load Greenfield — Chicago Open 2026',       fn: 'loadGreenfieldData' },
-    { label: 'Load Las Sendas — Chicago Open 2026',       fn: 'loadLasSendasData' },
-    { label: 'Load Madison West — Chicago Open 2026',     fn: 'loadMadisonWestData' },
-    { label: 'Load Menomonee Falls — Chicago Open 2026',  fn: 'loadMenomoneeFallsData' },
-    { label: 'Load Milwaukee — Chicago Open 2026',        fn: 'loadMilwaukeeData' },
-    { label: 'Load Mokena — Chicago Open 2026',           fn: 'loadMokenaData' },
-    { label: 'Load Northbrook — Chicago Open 2026',       fn: 'loadNorthbrookData' },
-    { label: 'Load Oak Creek — Chicago Open 2026',        fn: 'loadOakCreekData' },
-    { label: 'Load Orange — Chicago Open 2026',           fn: 'loadOrangeData' },
-    { label: 'Load Park Ridge — Chicago Open 2026',       fn: 'loadParkRidgeData' },
-    { label: 'Load Pensacola — Chicago Open 2026',        fn: 'loadPensacolaData' },
-    { label: 'Load Pewaukee — Chicago Open 2026',         fn: 'loadPewaukeeData' },
-    { label: 'Load Pleasant Prairie — Chicago Open 2026', fn: 'loadPleasantPrairieData' },
-    { label: 'Load Schererville — Chicago Open 2026',     fn: 'loadScherervilleData' },
-    { label: 'Load South Barrington — Chicago Open 2026', fn: 'loadSouthBarringtonData' },
-    { label: 'Load St. Charles — Chicago Open 2026',      fn: 'loadStCharlesData' },
-    { label: 'Load West Bloomfield — Chicago Open 2026',  fn: 'loadWestBloomfieldData' },
-    { label: 'Load West Loop — Chicago Open 2026',        fn: 'loadWestLoopData' },
-    { label: 'Load Wilmette — Chicago Open 2026',         fn: 'loadWilmetteData' },
-  ];
+  // One-time data imports — removed 8/23/26: Chicago Open 2026 is closed out,
+  // and these buttons had zero confirmation before overwriting a studio's live data.
+  const oneTimeImports = [];
 
   el.innerHTML = `
     <div class="section-card" style="margin-bottom:1.5rem;border-top:3px solid #27ae60;background:#f0fff4">
@@ -3336,6 +3570,7 @@ function renderAdminTab() {
         <p style="font-size:0.7rem;color:var(--muted);line-height:1.6">Every save now automatically creates a timestamped backup. Use this to restore any studio's data to a previous point in time if anything goes wrong.</p>
       </div>
     </div>
+    <div id="lockManagerArea"></div>
     <div class="section-card" style="margin-bottom:1.5rem;border-top:3px solid var(--gold);background:#fffbf0">
       <div class="section-header">
         <div class="section-title">🎯 Active Competition</div>
@@ -3512,6 +3747,7 @@ function renderAdminTab() {
       </div>
     </div>
   `;
+  renderLockManager();
 }
 
 async function addStudio() {
@@ -3531,7 +3767,9 @@ async function removeStudio(i) {
   const name = appState.studios[i];
   delete appState.credentials[name];
   appState.studios.splice(i, 1);
+  _intentionalStudioRemoval = true;
   await saveState();
+  _intentionalStudioRemoval = false;
   populateLoginDropdown();
   renderAdminTab();
 }
@@ -8301,6 +8539,7 @@ function collapseEntry(idx) {
 }
 
 function addDanceEntry() {
+  if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   if (!d.danceEntries) d.danceEntries = [];
   d.danceEntries.push({ student:'', teacher:'', style:'', level:'', ageCat:'', dances:[] });
@@ -8310,6 +8549,7 @@ function addDanceEntry() {
 }
 
 function updateDanceEntry(idx, field, val) {
+  if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   if (!d.danceEntries[idx]) return;
   d.danceEntries[idx][field] = val;
@@ -8321,6 +8561,7 @@ function updateDanceEntry(idx, field, val) {
 }
 
 function toggleDanceDance(idx, dance) {
+  if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   const entry = d.danceEntries[idx];
   if (!entry) return;
@@ -8344,6 +8585,7 @@ function toggleDanceDance(idx, dance) {
 }
 
 function removeDanceEntry(idx) {
+  if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   d.danceEntries.splice(idx, 1);
   renderDanceEntries(d);
