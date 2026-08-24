@@ -1204,6 +1204,7 @@ async function fbDelete(key) {
 
 let _isLoading = false;
 let _intentionalStudioRemoval = false; // set true only inside removeStudio() so the guard below doesn't block a deliberate removal
+let _dirtyDataKeys = new Set(); // studio::comp keys actually edited this session — saveState only ever writes these, never a stale cached copy just sitting in memory
 
 async function loadState() {
   _isLoading = true;
@@ -1337,6 +1338,7 @@ async function saveState() {
     
     // Save each studio's data — but ONLY if it has actual people/content
     for (const key of Object.keys(appState.data)) {
+      if (!_dirtyDataKeys.has(key)) continue; // never re-save a studio that wasn't actually edited this session — prevents stale in-memory copies overwriting real current data
       const d = appState.data[key];
       if (!d) continue;
       
@@ -1368,6 +1370,7 @@ async function saveState() {
           }
         } catch(e) { /* if read fails, proceed with save */ }
         await saveWithBackup('studioData::' + key, JSON.stringify(d));
+        _dirtyDataKeys.delete(key);
       }
     }
     showSaveBanner();
@@ -2404,7 +2407,8 @@ function checkMealChoice(i) {
 // ── GENERIC ROW UPDATER ──
 
 function updateRow(section, index, field, value) {
-  if (section !== 'meals' && lockBlocksEdit()) { showLockedNotice(); return; }
+  const isMealRelatedField = (section === 'meals') || (section === 'vip' && (field === 'meal' || field === 'allergy'));
+  if (!isMealRelatedField && lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
   if (!d[section][index]) d[section][index] = {};
   d[section][index][field] = value;
@@ -2476,6 +2480,10 @@ async function logActivityEvent(studio, comp, type, actor) {
 
 async function lockStudioRoster(studio, comp, actor) {
   const key = studio + '::' + comp;
+  const loadedOk = await ensureStudioLoaded(studio, comp, true); // force a fresh read so we never lock a blank/stale in-memory record
+  if (!loadedOk) {
+    throw new Error('Could not confirm ' + studio + '\'s real data before locking — refused to save, to avoid overwriting it with a blank record.');
+  }
   const d = getStudioData(studio, comp);
   d.locked = true;
   d.lockedAt = new Date().toLocaleString();
@@ -2486,6 +2494,10 @@ async function lockStudioRoster(studio, comp, actor) {
 
 async function unlockStudioRoster(studio, comp, actor) {
   const key = studio + '::' + comp;
+  const loadedOk = await ensureStudioLoaded(studio, comp, true); // same protection on unlock
+  if (!loadedOk) {
+    throw new Error('Could not confirm ' + studio + '\'s real data before unlocking — refused to save, to avoid overwriting it with a blank record.');
+  }
   const d = getStudioData(studio, comp);
   d.locked = false;
   d.unlockedAt = new Date().toLocaleString();
@@ -2560,6 +2572,7 @@ async function renderLockManager() {
   const compSel = document.getElementById('activeCompSelect');
   const comp = (compSel && compSel.value) ? compSel.value : (appState.activeComp || getDefaultComp());
   const studios = getAllStudiosForComp(comp);
+  for (const s of studios) { await ensureStudioLoaded(s, comp); } // make sure the list below reflects real data, not blank in-memory placeholders
   const lockStates = studios.map(s => {
     const d = getStudioData(s, comp);
     return { studio: s, locked: !!d.locked, lockedAt: d.lockedAt };
@@ -2608,11 +2621,23 @@ async function renderLockManager() {
 }
 
 async function adminLockStudio(studio, comp) {
-  await lockStudioRoster(studio, comp, 'organizer');
+  try {
+    await lockStudioRoster(studio, comp, 'organizer');
+  } catch(e) {
+    showModal('⚠️', 'Could Not Lock', studio + '\'s data could not be confirmed loaded — nothing was saved. Try again in a moment (usually a connection hiccup).');
+    console.error(e);
+    return;
+  }
   renderLockManager();
 }
 async function adminUnlockStudio(studio, comp) {
-  await unlockStudioRoster(studio, comp, 'organizer');
+  try {
+    await unlockStudioRoster(studio, comp, 'organizer');
+  } catch(e) {
+    showModal('⚠️', 'Could Not Unlock', studio + '\'s data could not be confirmed loaded — nothing was saved. Try again in a moment (usually a connection hiccup).');
+    console.error(e);
+    return;
+  }
   renderLockManager();
 }
 function bulkLockAllStudios(comp) {
@@ -2624,12 +2649,23 @@ function bulkLockAllStudios(comp) {
 }
 async function confirmBulkLock(comp) {
   const studios = getAllStudiosForComp(comp);
+  const failed = [];
   for (const s of studios) {
+    const loadedOk = await ensureStudioLoaded(s, comp, true);
+    if (!loadedOk) { failed.push(s); continue; }
     const d = getStudioData(s, comp);
-    if (!d.locked) await lockStudioRoster(s, comp, 'organizer');
+    if (!d.locked) {
+      try { await lockStudioRoster(s, comp, 'organizer'); }
+      catch(e) { failed.push(s); console.error(e); }
+    }
   }
   renderLockManager();
-  showModal('✓', 'Done', `All studios for ${comp} are now locked.`);
+  if (failed.length) {
+    showModal('⚠️', 'Some Studios Not Locked',
+      'Locked everyone except: <strong>' + failed.join(', ') + '</strong> — their data couldn\'t be confirmed loaded, so nothing was touched for them. Try locking those individually in a moment.');
+  } else {
+    showModal('✓', 'Done', `All studios for ${comp} are now locked.`);
+  }
 }
 
 // ── SAVE ──
@@ -2639,6 +2675,7 @@ let _unsavedChanges = false;
 
 function triggerAutoSave() {
   if (_isLoading) return; // don't queue saves during initial data load
+  if (currentStudio && currentComp) _dirtyDataKeys.add(currentStudio + '::' + currentComp);
   _unsavedChanges = true;
   const b = document.getElementById('saveBanner');
   if (b) { b.textContent = '● Saving...'; b.classList.add('show'); b.style.background='#888'; }
