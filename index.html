@@ -7,6 +7,11 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Chicago FADS Competition Hub</title>
+<!-- APP_VERSION: 2026-08-27-1946 (bump this string on every deploy) -->
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <!-- Firebase -->
 <script>
@@ -1206,6 +1211,61 @@ let _isLoading = false;
 let _intentionalStudioRemoval = false; // set true only inside removeStudio() so the guard below doesn't block a deliberate removal
 let _dirtyDataKeys = new Set(); // studio::comp keys actually edited this session — saveState only ever writes these, never a stale cached copy just sitting in memory
 
+// ── FRESH-MERGE BEFORE WRITE ──
+// Right before any studio's edit gets saved, this fetches whatever is CURRENTLY live in Firestore
+// (which may include changes this browser never saw — e.g. the studio's own device saved something
+// moments ago) and merges it with the local edit, instead of trusting local memory alone.
+// Rows are matched by name where possible so two different real changes don't erase each other.
+// Any failure here just falls back to the local copy exactly as before — this can only make a save
+// safer, never worse or blocked.
+function studioRecordHasRealContent(d) {
+  try {
+    return !!(
+      (d.vip && d.vip.some(r => r.name)) ||
+      (d.tickets && d.tickets.some(r => r.name)) ||
+      (d.meals && d.meals.some(r => r.satMealChoice || r.allergy)) ||
+      (d.compEntries && d.compEntries.some(r => (r.vipQty||0) > 0 || (r.alcQty||0) > 0)) ||
+      (d.danceEntries && d.danceEntries.length > 0)
+    );
+  } catch(e) { return false; }
+}
+
+function mergeNamedRows(freshRows, localRows) {
+  // Union by name: keep local's version of any row that exists in both (it's the current edit),
+  // and pull in any row that exists in fresh but not locally (someone else's real addition we hadn't seen).
+  freshRows = Array.isArray(freshRows) ? freshRows : [];
+  localRows = Array.isArray(localRows) ? localRows : [];
+  const localNames = new Set(localRows.filter(r => r && r.name).map(r => r.name));
+  const merged = [...localRows];
+  freshRows.forEach(r => { if (r && r.name && !localNames.has(r.name)) merged.push(r); });
+  return merged;
+}
+
+async function mergeWithFreshBeforeSave(key, localD) {
+  try {
+    const freshStr = await fbGet('studioData::' + key);
+    if (!freshStr) return localD; // nothing live yet, or fetch failed — use local as-is, same as before
+    const fresh = JSON.parse(freshStr);
+    if (!studioRecordHasRealContent(fresh)) return localD; // fresh has nothing real to merge in
+
+    const merged = { ...localD };
+    merged.vip = mergeNamedRows(fresh.vip, localD.vip);
+    merged.tickets = mergeNamedRows(fresh.tickets, localD.tickets);
+    // meals/danceEntries are position-linked to tickets/each other — only extend with genuinely new
+    // entries beyond what local already has, never overwrite local's own in-progress edits
+    if (Array.isArray(fresh.meals) && Array.isArray(localD.meals) && fresh.meals.length > localD.meals.length) {
+      merged.meals = [...localD.meals, ...fresh.meals.slice(localD.meals.length)];
+    }
+    if (Array.isArray(fresh.danceEntries) && Array.isArray(localD.danceEntries) && fresh.danceEntries.length > localD.danceEntries.length) {
+      merged.danceEntries = [...localD.danceEntries, ...fresh.danceEntries.slice(localD.danceEntries.length)];
+    }
+    return merged;
+  } catch(e) {
+    console.warn('mergeWithFreshBeforeSave: falling back to local data for', key, e);
+    return localD; // any problem at all — behave exactly as before, never block or corrupt the save
+  }
+}
+
 async function loadState() {
   _isLoading = true;
   try {
@@ -1261,6 +1321,7 @@ async function loadState() {
       document.getElementById('appHeader').style.display = 'flex';
       document.getElementById('appMain').style.display = 'block';
       document.getElementById('headerName').textContent = currentUser.name;
+      resetInactivityTimer();
       setTimeout(async () => {
         if (currentUser.type === 'organizer') {
           showOrganizerView(); // already has setTimeout inside now
@@ -1339,8 +1400,10 @@ async function saveState() {
     // Save each studio's data — but ONLY if it has actual people/content
     for (const key of Object.keys(appState.data)) {
       if (!_dirtyDataKeys.has(key)) continue; // never re-save a studio that wasn't actually edited this session — prevents stale in-memory copies overwriting real current data
-      const d = appState.data[key];
+      let d = appState.data[key];
       if (!d) continue;
+      d = await mergeWithFreshBeforeSave(key, d); // fold in anything newer that's live in Firestore before this write proceeds
+      appState.data[key] = d; // keep the in-memory copy consistent with what's about to be saved
       
       // Skip old/completed competitions
       const keyComp = key.split('::').slice(1).join('::');
@@ -1476,6 +1539,54 @@ function doLogout() {
   document.getElementById('studioView').style.display = 'none';
   document.getElementById('organizerView').style.display = 'none';
 }
+
+// ── AUTO LOGOUT (inactivity) ──
+// Logs anyone out after a period of no activity — shortens how long any browser can sit
+// open holding data in memory, which is exactly the condition that's caused trouble tonight.
+const AUTO_LOGOUT_MINUTES = 30;
+const AUTO_LOGOUT_WARNING_MINUTES = 2; // shown this many minutes before the actual logout
+let _inactivityTimer = null;
+let _inactivityWarningTimer = null;
+
+function resetInactivityTimer() {
+  clearTimeout(_inactivityTimer);
+  clearTimeout(_inactivityWarningTimer);
+  const banner = document.getElementById('inactivityWarningBanner');
+  if (banner) banner.remove();
+  if (!currentUser) return; // nobody logged in — nothing to track
+  _inactivityWarningTimer = setTimeout(showInactivityWarning, (AUTO_LOGOUT_MINUTES - AUTO_LOGOUT_WARNING_MINUTES) * 60 * 1000);
+  _inactivityTimer = setTimeout(performAutoLogout, AUTO_LOGOUT_MINUTES * 60 * 1000);
+}
+
+function showInactivityWarning() {
+  if (!currentUser || document.getElementById('inactivityWarningBanner')) return;
+  const b = document.createElement('div');
+  b.id = 'inactivityWarningBanner';
+  b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;padding:0.75rem 1rem;text-align:center;z-index:99999;font-size:0.82rem;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3)';
+  b.innerHTML = `You'll be logged out in ${AUTO_LOGOUT_WARNING_MINUTES} minutes due to inactivity, to keep data safe. ` +
+    `<button style="margin-left:0.5rem;padding:0.35rem 0.9rem;border:none;border-radius:4px;background:#fff;color:#c0392b;font-weight:600;cursor:pointer" onclick="resetInactivityTimer()">I'm still here</button>`;
+  document.body.appendChild(b);
+}
+
+async function performAutoLogout() {
+  if (!currentUser) return;
+  try {
+    if (typeof _unsavedChanges !== 'undefined' && _unsavedChanges) {
+      await saveState(); // make sure anything actively being edited is saved first
+    }
+  } catch(e) { console.error('Auto-logout save error', e); }
+  const wasStudio = currentUser && currentUser.type === 'studio';
+  doLogout();
+  showModal('🔒', 'Logged Out',
+    `You were logged out after ${AUTO_LOGOUT_MINUTES} minutes of inactivity, to keep everyone's data safe. Please log back in${wasStudio ? ' to continue' : ''}.`);
+}
+
+['mousedown','keydown','touchstart','scroll'].forEach(evt => {
+  document.addEventListener(evt, () => { if (currentUser) resetInactivityTimer(); }, { passive: true });
+});
+// Start (or restart) the timer whenever someone actually logs in
+const _origDoLogin = doLogin;
+doLogin = function(...args) { _origDoLogin.apply(this, args); resetInactivityTimer(); };
 
 // ═══════════════════════════════════════════════════════
 // TAB HELPERS
@@ -6904,6 +7015,58 @@ async function getBackups(key) {
   } catch(e) { return []; }
 }
 
+function backupDataHasRealContent(dataStr) {
+  try {
+    const d = JSON.parse(dataStr);
+    return !!(
+      (d.vip && d.vip.some(r => r.name)) ||
+      (d.tickets && d.tickets.some(r => r.name)) ||
+      (d.meals && d.meals.some(r => r.satMealChoice || r.allergy)) ||
+      (d.compEntries && d.compEntries.some(r => (r.vipQty||0) > 0 || (r.alcQty||0) > 0)) ||
+      (d.danceEntries && d.danceEntries.length > 0)
+    );
+  } catch(e) { return false; }
+}
+
+async function restoreAllWipedStudios(comp) {
+  if (!confirm('Check every studio for ' + comp + ' — any with empty live data will be restored to their own most recent backup that still has real content. Studios that already look fine will not be touched. Continue?')) return;
+  const allStudios = getAllStudiosForComp(comp);
+  const restored = [];
+  const alreadyFine = [];
+  const noGoodBackupFound = [];
+
+  for (const studio of allStudios) {
+    const key = 'studioData::' + studio + '::' + comp;
+    let liveStr;
+    try { liveStr = await fbGet(key); } catch(e) { liveStr = undefined; }
+    if (liveStr !== undefined && liveStr !== null && backupDataHasRealContent(liveStr)) {
+      alreadyFine.push(studio);
+      continue; // healthy — leave it completely alone
+    }
+    const backups = await getBackups(key);
+    let found = false;
+    for (let i = backups.length - 1; i >= 0; i--) { // newest to oldest
+      const b = backups[i];
+      let snapStr;
+      try { snapStr = await fbGet(b.key); } catch(e) { snapStr = undefined; }
+      if (snapStr && backupDataHasRealContent(snapStr)) {
+        await fbSet(key, snapStr);
+        appState.data[key] = JSON.parse(snapStr);
+        restored.push(studio + ' (from ' + b.time + ')');
+        found = true;
+        break;
+      }
+    }
+    if (!found) noGoodBackupFound.push(studio);
+  }
+
+  let summary = '';
+  if (restored.length) summary += '<strong>Restored:</strong><br>' + restored.join('<br>') + '<br><br>';
+  if (alreadyFine.length) summary += '<strong>Already fine, untouched:</strong> ' + alreadyFine.join(', ') + '<br><br>';
+  if (noGoodBackupFound.length) summary += '<strong style="color:var(--red)">No good backup found for:</strong> ' + noGoodBackupFound.join(', ');
+  showModal('🚑', 'Restore Complete', summary || 'Nothing to do.');
+}
+
 async function restoreFromBackup(key, backupKey) {
   if (!confirm('Restore this backup? Current data will be overwritten.')) return;
   const data = await fbGet(backupKey);
@@ -6918,7 +7081,11 @@ async function restoreFromBackup(key, backupKey) {
 async function showBackupManager() {
   const comp = document.getElementById('orgCompSelect')?.value || getActiveComp();
   const allStudios = getAllStudiosForComp(comp);
-  let html = '<div style="max-height:60vh;overflow-y:auto">';
+  let html = `<div style="margin-bottom:1rem;padding:0.75rem;background:#fff4e5;border:1px solid var(--gold);border-radius:6px">
+    <button class="btn btn-sm" style="width:100%;background:var(--gold);color:#000;margin:0" onclick="restoreAllWipedStudios('${comp}')">🚑 Restore All Wiped Studios (${comp}) to Last Good Backup</button>
+    <p style="font-size:0.65rem;color:var(--muted);margin-top:0.4rem;margin-bottom:0">Only touches studios whose live data is currently empty. Healthy studios are left alone. Automatically skips any backup that's also empty.</p>
+  </div>
+  <div style="max-height:50vh;overflow-y:auto">`;
   for (const studio of allStudios) {
     const key = 'studioData::' + studio + '::' + comp;
     const backups = await getBackups(key);
@@ -8685,6 +8852,35 @@ function initApp() {
   }
 }
 initApp();
+
+// ── UPDATE CHECKER ──
+// A browser tab left open for hours/days won't naturally re-fetch a newer deployed version on its own.
+// This actively checks the live file every few minutes and whenever the tab regains focus, so an
+// out-of-date tab (which could otherwise silently run old, unpatched code) gets caught and prompted.
+const _appVersionMarker = (document.documentElement.outerHTML.match(/APP_VERSION:\s*([\w-]+)/) || [])[1] || null;
+
+async function checkForAppUpdate() {
+  try {
+    const res = await fetch(window.location.pathname + '?_v=' + Date.now(), { cache: 'no-store' });
+    const text = await res.text();
+    const liveVersion = (text.match(/APP_VERSION:\s*([\w-]+)/) || [])[1];
+    if (liveVersion && _appVersionMarker && liveVersion !== _appVersionMarker) {
+      showUpdateBanner();
+    }
+  } catch(e) { /* silent — a failed check just tries again next interval */ }
+}
+
+function showUpdateBanner() {
+  if (document.getElementById('updateAvailableBanner')) return; // already showing
+  const b = document.createElement('div');
+  b.id = 'updateAvailableBanner';
+  b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--gold);color:#000;padding:0.75rem 1rem;text-align:center;z-index:99999;font-size:0.82rem;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3)';
+  b.innerHTML = 'A newer version of this app is available. Please save any changes, then <button style="margin-left:0.5rem;padding:0.35rem 0.9rem;border:none;border-radius:4px;background:#000;color:#fff;font-weight:600;cursor:pointer" onclick="location.reload()">Refresh Now</button>';
+  document.body.appendChild(b);
+}
+
+setInterval(checkForAppUpdate, 3 * 60 * 1000); // every 3 minutes
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForAppUpdate(); }); // when the tab regains focus
 </script>
 
 <!-- ── MODAL POPUPS ── -->
