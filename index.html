@@ -1241,29 +1241,43 @@ function mergeNamedRows(freshRows, localRows) {
   return merged;
 }
 
-async function mergeWithFreshBeforeSave(key, localD) {
-  try {
-    const freshStr = await fbGet('studioData::' + key);
-    if (!freshStr) return localD; // nothing live yet, or fetch failed — use local as-is, same as before
-    const fresh = JSON.parse(freshStr);
-    if (!studioRecordHasRealContent(fresh)) return localD; // fresh has nothing real to merge in
+function mergeTicketsAndMeals(freshTickets, freshMeals, localTickets, localMeals) {
+  // Tickets and meals describe the SAME people and must always stay lined up. A name-based ticket
+  // merge must pull each new person's meal entry by NAME too — never by raw array position — or the
+  // two arrays can drift apart (a meal choice attaching to the wrong person, or appearing to vanish).
+  freshTickets = Array.isArray(freshTickets) ? freshTickets : [];
+  freshMeals = Array.isArray(freshMeals) ? freshMeals : [];
+  localTickets = Array.isArray(localTickets) ? localTickets : [];
+  localMeals = Array.isArray(localMeals) ? localMeals : [];
 
-    const merged = { ...localD };
-    merged.vip = mergeNamedRows(fresh.vip, localD.vip);
-    merged.tickets = mergeNamedRows(fresh.tickets, localD.tickets);
-    // meals/danceEntries are position-linked to tickets/each other — only extend with genuinely new
-    // entries beyond what local already has, never overwrite local's own in-progress edits
-    if (Array.isArray(fresh.meals) && Array.isArray(localD.meals) && fresh.meals.length > localD.meals.length) {
-      merged.meals = [...localD.meals, ...fresh.meals.slice(localD.meals.length)];
+  const localNames = new Set(localTickets.filter(r => r && r.name).map(r => r.name));
+  const mergedTickets = [...localTickets];
+  const mergedMeals = [...localMeals];
+  while (mergedMeals.length < mergedTickets.length) mergedMeals.push({});
+
+  freshTickets.forEach((t, idx) => {
+    if (t && t.name && !localNames.has(t.name)) {
+      mergedTickets.push(t);
+      const matchByName = freshMeals.find(m => m && m.name && m.name.trim().toLowerCase() === t.name.trim().toLowerCase());
+      mergedMeals.push(matchByName || freshMeals[idx] || {}); // prefer the name match; position is only a last-resort fallback
     }
-    if (Array.isArray(fresh.danceEntries) && Array.isArray(localD.danceEntries) && fresh.danceEntries.length > localD.danceEntries.length) {
-      merged.danceEntries = [...localD.danceEntries, ...fresh.danceEntries.slice(localD.danceEntries.length)];
-    }
-    return merged;
-  } catch(e) {
-    console.warn('mergeWithFreshBeforeSave: falling back to local data for', key, e);
-    return localD; // any problem at all — behave exactly as before, never block or corrupt the save
-  }
+  });
+
+  return { tickets: mergedTickets, meals: mergedMeals };
+}
+
+async function mergeWithFreshBeforeSave(key, localD) {
+  // DISABLED as of tonight: this merge matched people by NAME across two snapshots of the same
+  // array, and that breaks the instant a name is cleared, retyped, or capitalized differently —
+  // the old entry looks unrecognized and gets silently re-added as a duplicate elsewhere, which is
+  // exactly what was causing the ALC "cleared name wiped everything" / "not saving" reports.
+  // Turning this off rather than patching it further under time pressure the night before a
+  // competition. The other protections (dirty-tracking, locking, hasData/read-before-write,
+  // auto-logout) are untouched and still fully in effect.
+  // Real per-person IDs (coming with the Option A rebuild) will make a safe version of this
+  // possible again — the mergeNamedRows / mergeTicketsAndMeals functions above are left in place
+  // for reference when that happens, they're just not called from here anymore.
+  return localD;
 }
 
 async function loadState() {
