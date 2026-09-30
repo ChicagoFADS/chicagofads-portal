@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Chicago FADS Competition Hub</title>
-<!-- APP_VERSION: 2026-09-28-1705 (bump this string on every deploy) -->
+<!-- APP_VERSION: 2026-09-28-1745 (bump this string on every deploy) -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -2060,7 +2060,7 @@ function renderPeopleListV2(d) {
     const ticketFee = isVIP ? 0 : calcPersonTicketFeeV2(p);
     const mealFee   = isVIP ? 0 : calcMealFee(p);
     const total     = ticketFee + mealFee;
-    const mealMissing = !isVIP && p.satCocktail && !p.childrenMeal && !p.satMealChoice;
+    const mealMissing = !isVIP && p.satCocktail && !p.childrenMeal && !p.satMealChoice && getMealChoices(currentComp).length > 0;
 
     const sessionChks = isVIP
       ? `<span class="vip-badge">FULL PKG ✓</span>`
@@ -2359,7 +2359,7 @@ function makeVipRow(i, r = {}) {
   const tr = document.createElement('tr');
   tr.id = `vipRow${i}`;
   if (r.needsReview) tr.style.background = '#fff0ed';
-  const mealMissing = r.name && !r.meal;
+  const mealMissing = r.name && !r.meal && getMealChoices(currentComp).length > 0;
   tr.innerHTML = `
     <td class="row-num">${i+1}</td>
     <td style="position:relative">
@@ -2490,6 +2490,9 @@ function getMealChoices(comp) {
   if (c && c.includes('DanceSport')) {
     return ['Beef & Seafood', 'Vegetarian'];
   }
+  if (c && c.includes('Holiday Star Ball')) {
+    return []; // stations setup — no individual dinner choice, just attendance (headcount is unaffected)
+  }
   return ['Beef', 'Fish', 'Chicken', 'Vegetarian'];
 }
 
@@ -2554,7 +2557,7 @@ function renderPeopleList(d) {
     const ticketFee = isVIP ? 0 : calcTicketFee(t);
     const mealFee   = isVIP ? 0 : calcMealFee(m);
     const total     = ticketFee + mealFee;
-    const mealMissing = !isVIP && m.satCocktail && !m.childrenMeal && !m.satMealChoice;
+    const mealMissing = !isVIP && m.satCocktail && !m.childrenMeal && !m.satMealChoice && getMealChoices(currentComp).length > 0;
 
     const sessionChks = isVIP
       ? `<span class="vip-badge">FULL PKG ✓</span>`
@@ -3490,7 +3493,7 @@ function validateStudioData() {
     if (r.name && !r.proam) {
       issues.push(`VIP "${r.name}": Pro/Am not selected`);
     }
-    if (r.name && !r.meal) {
+    if (r.name && !r.meal && getMealChoices(currentComp).length > 0) {
       issues.push(`VIP "${r.name}": dinner choice not selected`);
       highlightCell('vipMeal', i, true);
     } else {
@@ -3503,7 +3506,7 @@ function validateStudioData() {
       if (!p.name || !p.name.trim()) return; // blank rows ok
       if (!p.proam) issues.push(`Ticket "${p.name}": Pro/Am not selected`);
       if (!p.vipAlc) issues.push(`Ticket "${p.name}": VIP/ALC not selected`);
-      if (p.vipAlc !== 'VIP' && p.satCocktail && !p.childrenMeal && !p.satMealChoice) {
+      if (p.vipAlc !== 'VIP' && p.satCocktail && !p.childrenMeal && !p.satMealChoice && getMealChoices(currentComp).length > 0) {
         issues.push(`"${p.name}": attending Sat Banquet but dinner choice not selected`);
       }
     });
@@ -3524,7 +3527,7 @@ function validateStudioData() {
   // Meals — missing name or dinner choice if satCocktail is checked
   d.meals.forEach((r, i) => {
     if (!r.name || !r.name.trim()) return;
-    if (r.satCocktail && !r.childrenMeal && !r.satMealChoice) {
+    if (r.satCocktail && !r.childrenMeal && !r.satMealChoice && getMealChoices(currentComp).length > 0) {
       issues.push(`Meal "${r.name}": attending Sat Banquet but dinner choice not selected`);
       highlightCell('mealChoice', i, true);
     } else {
