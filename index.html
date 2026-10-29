@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Chicago FADS Competition Hub</title>
-<!-- APP_VERSION: 2026-10-29-1100 (bump this string on every deploy) -->
+<!-- APP_VERSION: 2026-10-29-1200 (bump this string on every deploy) -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -1302,6 +1302,39 @@ async function mergeWithFreshBeforeSave(key, localD) {
   // Real per-person IDs (coming with the Option A rebuild) will make a safe version of this
   // possible again — the mergeNamedRows / mergeTicketsAndMeals functions above are left in place
   // for reference when that happens, they're just not called from here anymore.
+  // Narrow replacement: merge ONLY the append-only conversation + activity data from what is live, so an older open
+  // page can never erase a reply the organizer (or the studio) saved a moment ago. Everything else is untouched.
+  try {
+    const liveStr = await fbGet('studioData::' + key);
+    if (!liveStr) return localD;
+    const live = JSON.parse(liveStr);
+    if (Array.isArray(live.requests) && live.requests.length) {
+      if (!Array.isArray(localD.requests)) localD.requests = [];
+      live.requests.forEach(lr => {
+        const mine = localD.requests.find(r => r.timestamp === lr.timestamp);
+        if (!mine) { localD.requests.push(lr); return; }
+        const msgs = (mine.messages && mine.messages.length) ? mine.messages.slice() : (typeof getRequestMessages === 'function' ? getRequestMessages(mine) : []);
+        const liveMsgs = (lr.messages && lr.messages.length) ? lr.messages : (typeof getRequestMessages === 'function' ? getRequestMessages(lr) : []);
+        let added = false;
+        liveMsgs.forEach(m => { if (!msgs.some(x => x.from === m.from && x.at === m.at && x.text === m.text)) { msgs.push(m); added = true; } });
+        msgs.sort((a, b) => (a.at || 0) - (b.at || 0));
+        mine.messages = msgs;
+        const lastMsg = msgs.length ? (msgs[msgs.length - 1].at || 0) : 0;
+        if (lr.acknowledged && lr.acknowledgedAt && lr.acknowledgedAt >= lastMsg && !mine.acknowledged) {
+          mine.acknowledged = true; mine.acknowledgedAt = lr.acknowledgedAt;   // it was resolved after the last message
+        } else if (added && mine.acknowledged && (mine.acknowledgedAt || 0) < lastMsg) {
+          mine.acknowledged = false;                                           // a newer message arrived: needs attention again
+        }
+      });
+      localD.requests.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    }
+    if (Array.isArray(live.changeLog) && live.changeLog.length) {
+      if (!Array.isArray(localD.changeLog)) localD.changeLog = [];
+      live.changeLog.forEach(e => { if (e && e.id && !localD.changeLog.some(x => x.id === e.id)) localD.changeLog.push(e); });
+      localD.changeLog.sort((a, b) => (b.at || 0) - (a.at || 0));
+      if (localD.changeLog.length > 80) localD.changeLog.length = 80;
+    }
+  } catch (e) { console.warn('Request/activity merge skipped (using this page\'s copy):', e); }
   return localD;
 }
 
@@ -1549,7 +1582,8 @@ async function saveState() {
       competitions: appState.competitions,
       activeComp: appState.activeComp,
       credentials: appState.credentials,
-      visitingStudios: appState.visitingStudios
+      visitingStudios: appState.visitingStudios,
+      studioComplete: appState.studioComplete || {}
     };
     await fbSetBacked('appState', JSON.stringify(config));
     // Only save data for active competitions — skip completed ones
@@ -1581,9 +1615,19 @@ async function saveState() {
       if (Array.isArray(d.people) && !d.people.some(r => r.name)) {
         try {
           const _liveStr = await fbGet('studioData::' + key);
-          if (_liveStr && countRealPeople(JSON.parse(_liveStr)) > 0 && countRealPeople(d) === 0) {
-            console.warn('Blocked save for', key, '— would erase every person');
-            continue;
+          const _live = _liveStr ? JSON.parse(_liveStr) : null;
+          if (_live && countRealPeople(_live) > 0 && countRealPeople(d) === 0) {
+            // This page is showing an older, emptier copy than what is stored (someone saved from another device).
+            // Never erase them: take the stored roster, keep this page's own other changes (e.g. a new request), and save that.
+            console.warn('Stale page for', key, '— adopting the stored roster instead of erasing it');
+            ['vip', 'people', 'tickets', 'meals', 'dinnerCredits'].forEach(f => { if (_live[f] !== undefined) d[f] = _live[f]; });
+            if (!(d.compEntries || []).some(r => r.vipQty || r.alcQty) && _live.compEntries) d.compEntries = _live.compEntries;
+            if (!(d.danceEntries || []).length && _live.danceEntries) d.danceEntries = _live.danceEntries;
+            if (_live.locked !== undefined) { d.locked = _live.locked; d.lockedAt = _live.lockedAt; d.lockedBy = _live.lockedBy; }
+            appState.data[key] = d;
+            if (typeof currentStudio !== 'undefined' && currentStudio && key === currentStudio + '::' + currentComp) {
+              setTimeout(() => { try { loadStudioData(); showModal('ℹ️', 'Roster updated', 'Your roster was changed on another device, so this page was refreshed to show the latest. Nothing was lost.'); } catch (e) {} }, 300);
+            }
           }
         } catch(e) { /* if the check can't run, fall through to the normal rules */ }
       }
@@ -8458,6 +8502,19 @@ async function viewBackupSnapshot(backupKey, studio, timeLabel) {
 
 
 
+async function freshenStudioForRequestChange(studio, comp) {
+  // A request change saves the studio's whole record, so start from what is stored right now (not an older copy
+  // sitting in this browser) — unless this browser has its own unsaved edits for that studio, which must not be thrown away.
+  const key = studio + '::' + comp;
+  if (_dirtyDataKeys.has(key)) return true;
+  const ok = await ensureStudioLoaded(studio, comp, true);
+  if (!ok) {
+    showModal('⚠️', 'Not sent', 'Could not confirm ' + studio + '\'s current data, so nothing was changed. Check your connection and try again.');
+    return false;
+  }
+  return true;
+}
+
 function getRequests(studio, comp) {
   const d = getStudioData(studio, comp);
   if (!d.requests) d.requests = [];
@@ -8503,26 +8560,30 @@ function submitReply(studio, comp, idx, fromRole) {
   addRequestMessage(studio, comp, idx, fromRole, input.value);
 }
 
-function addRequestMessage(studio, comp, idx, fromRole, textVal) {
+async function addRequestMessage(studio, comp, idx, fromRole, textVal) {
   const trimmed = (textVal || '').trim();
   if (!trimmed) return;
+  if (!(await freshenStudioForRequestChange(studio, comp))) return;
   const d = getStudioData(studio, comp);
   if (!d.requests || !d.requests[idx]) return;
   const r = d.requests[idx];
   if (!r.messages) r.messages = getRequestMessages(r); // migrate an old single-message request into a thread on first reply
   r.messages.push({ from: fromRole, text: trimmed, at: Date.now() });
   r.acknowledged = false; // a new message means it needs attention again, unless explicitly resolved
+  _dirtyDataKeys.add(studio + '::' + comp); // the studio being replied to must be saved, even if it is not the one currently open
   triggerAutoSave();
   renderStudioRequests();
   renderOrgRequests();
   updateOrgRequestsBadge();
 }
 
-function resolveRequestThread(studio, comp, idx) {
+async function resolveRequestThread(studio, comp, idx) {
+  if (!(await freshenStudioForRequestChange(studio, comp))) return;
   const d = getStudioData(studio, comp);
   if (!d.requests || !d.requests[idx]) return;
   d.requests[idx].acknowledged = true;
   d.requests[idx].acknowledgedAt = Date.now();
+  _dirtyDataKeys.add(studio + '::' + comp); // the studio being resolved must be saved, even if it is not the one currently open
   triggerAutoSave(); // routes through the normal protected/backed-up save path
   renderStudioRequests();
   renderOrgRequests();
