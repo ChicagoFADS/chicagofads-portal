@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Chicago FADS Competition Hub</title>
-<!-- APP_VERSION: 2026-09-28-1745 (bump this string on every deploy) -->
+<!-- APP_VERSION: 2026-10-29-1000 (bump this string on every deploy) -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -1514,7 +1514,11 @@ function installWriteFailureShim() {
   const orig = window._fbSetDoc;
   window._fbSetDoc = async function(...args) {
     try { return await orig.apply(this, args); }
-    catch (e) { _fbWriteFailures++; throw e; }
+    catch (e) {
+      const _p = String((args[0] && args[0].path) || '');
+      if (!/\/(archive|archiveIndex)::/.test(_p)) _fbWriteFailures++; // extra-backup writes failing must not make a good save look failed
+      throw e;
+    }
   };
   window._fbSetDocWrapped = true;
 }
@@ -1547,7 +1551,7 @@ async function saveState() {
       credentials: appState.credentials,
       visitingStudios: appState.visitingStudios
     };
-    await fbSet('appState', JSON.stringify(config));
+    await fbSetBacked('appState', JSON.stringify(config));
     // Only save data for active competitions — skip completed ones
     const activeComps = ['DanceSport Challenge 2026', 'Holiday Star Ball 2026'];
     
@@ -3183,7 +3187,7 @@ async function logActivityEvent(studio, comp, type, actor) {
     feed.unshift({ studio, comp, type, actor, at: new Date().toLocaleString(), ts: Date.now(),
                    snapshot: getStudioBreakdownSnapshot(studio, comp) });
     while (feed.length > 300) feed.pop();
-    await fbSet(feedKey, JSON.stringify(feed));
+    await fbSetBacked(feedKey, JSON.stringify(feed));
   } catch(e) { console.error('logActivityEvent error', e); }
 }
 
@@ -3225,7 +3229,7 @@ function requestEditUnlock() {
   if (!d.locked) return;
   showModal('🔓', 'Request to Edit',
     `This will unlock <strong>${currentStudio}</strong>'s roster for <strong>${currentComp}</strong> so you can make changes. ` +
-    `The organizer will see this change. When you're done, click "Done Editing / Re-Lock" to lock it again.<br><br>` +
+    `The organizer will see this change. When you're done, click <strong>Submit &amp; Lock Roster</strong> at the top of the page to lock it again.<br><br>` +
     `<button class="btn" onclick="closeModal(); confirmUnlockAndProceed();">Unlock &amp; Edit</button> ` +
     `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>`
   );
@@ -5019,7 +5023,7 @@ async function uploadDocs(type, inputId) {
             url: downloadURL,
             path: path
           });
-          await fbSet(getDocKey(studio, comp, type), JSON.stringify(existing));
+          await fbSetBacked(getDocKey(studio, comp, type), JSON.stringify(existing));
           if (progressEl) { progressEl.textContent = '✓ Uploaded!'; setTimeout(() => { progressEl.style.display='none'; }, 2000); }
           await renderStudioDocs();
           resolve();
@@ -5053,7 +5057,7 @@ async function deleteDoc(studio, comp, type, index) {
     } catch(e) { console.warn('Storage delete failed:', e); }
   }
   docs.splice(index, 1);
-  await fbSet(getDocKey(studio, comp, type), JSON.stringify(docs));
+  await fbSetBacked(getDocKey(studio, comp, type), JSON.stringify(docs));
   renderStudioDocs();
 }
 
@@ -6050,7 +6054,7 @@ async function addVisitorPayment(name, comp) {
   if (!amount || isNaN(amount) || amount <= 0) return alert('Please enter a valid amount.');
   const payments = await loadPayments(name, comp);
   payments.push({ amount, note, date: new Date().toLocaleDateString() });
-  await fbSet(getPaymentKey(name, comp), JSON.stringify(payments));
+  await fbSetBacked(getPaymentKey(name, comp), JSON.stringify(payments));
   showSaveBanner();
   renderVisitingTab();
 }
@@ -6059,7 +6063,7 @@ async function deleteVisitorPayment(name, comp, idx) {
   if (!confirm('Remove this payment?')) return;
   const payments = await loadPayments(name, comp);
   payments.splice(idx, 1);
-  await fbSet(getPaymentKey(name, comp), JSON.stringify(payments));
+  await fbSetBacked(getPaymentKey(name, comp), JSON.stringify(payments));
   renderVisitingTab();
 }
 
@@ -6073,7 +6077,7 @@ async function addPayment() {
 
   const payments = await loadPayments(studio, comp);
   payments.push({ amount, note, date: new Date().toLocaleDateString() });
-  await fbSet(getPaymentKey(studio, comp), JSON.stringify(payments));
+  await fbSetBacked(getPaymentKey(studio, comp), JSON.stringify(payments));
 
   document.getElementById('paymentAmount').value = '';
   document.getElementById('paymentNote').value = '';
@@ -6085,7 +6089,7 @@ async function deletePayment(studio, comp, idx) {
   if (!confirm('Remove this payment record?')) return;
   const payments = await loadPayments(studio, comp);
   payments.splice(idx, 1);
-  await fbSet(getPaymentKey(studio, comp), JSON.stringify(payments));
+  await fbSetBacked(getPaymentKey(studio, comp), JSON.stringify(payments));
   renderPaymentsTable();
 }
 
@@ -6551,7 +6555,7 @@ async function loadDoylestownData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [
@@ -6696,7 +6700,7 @@ async function loadGlenEllynData() {
   // Log the $15,000 payment
   const pmtKey = 'payments::' + studio + '::' + comp;
   const payments = [{ amount:15000, note:'Cash/Zelle 05/14/26', date:'5/14/2026' }];
-  await fbSet(pmtKey, JSON.stringify(payments));
+  await fbSetBacked(pmtKey, JSON.stringify(payments));
   showSaveBanner();
   alert('✓ Glen Ellyn loaded! 13 VIPs, 6 ALC, 537 entries, $32,258 total, $15,000 payment recorded.');
   renderAdminTab(); renderPaymentsTable();
@@ -6898,7 +6902,7 @@ async function loadNorthbrookData() {
   // Record $90 credit from Mini Match 2026 overpayment as negative payment
   const pmtKey = 'payments::' + studio + '::' + comp;
   const payments = [{ amount:-90, note:'Credit — Mini Match 2026 overpayment', date:'5/7/2026' }];
-  await fbSet(pmtKey, JSON.stringify(payments));
+  await fbSetBacked(pmtKey, JSON.stringify(payments));
   showSaveBanner();
   alert('✓ Northbrook loaded! 10 VIPs, 5 ALC, 454 entries, $27,596 total, $90 credit applied (balance due $27,506).');
   renderAdminTab(); renderPaymentsTable();
@@ -6913,7 +6917,7 @@ async function loadOakCreekData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [
@@ -6957,7 +6961,7 @@ async function loadOrangeData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [],
@@ -7022,7 +7026,7 @@ async function loadParkRidgeData() {
     { amount:3500,  note:'Cash/Zelle 5188014046', date:'5/12/2026' },
     { amount:-250,  note:'Credit — Elite Series 2025 overpayment', date:'5/13/2026' },
   ];
-  await fbSet(pmtKey, JSON.stringify(payments));
+  await fbSetBacked(pmtKey, JSON.stringify(payments));
   showSaveBanner();
   alert('✓ Park Ridge loaded! 3 VIPs, 201 entries, $10,846 total, $6,000 paid, $250 credit, balance $4,596.');
   renderAdminTab(); renderPaymentsTable();
@@ -7036,7 +7040,7 @@ async function loadPensacolaData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [
@@ -7066,7 +7070,7 @@ async function loadPewaukeeData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [
@@ -7107,7 +7111,7 @@ async function loadPleasantPrairieData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [],
@@ -7172,7 +7176,7 @@ async function loadScherervilleData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [
@@ -7256,7 +7260,7 @@ async function loadSouthBarringtonData() {
   // Record $6,000 payment
   const pmtKey = 'payments::' + studio + '::' + comp;
   const payments = [{ amount:6000, note:'Check/Zelle 5173615864', date:'5/7/2026' }];
-  await fbSet(pmtKey, JSON.stringify(payments));
+  await fbSetBacked(pmtKey, JSON.stringify(payments));
   showSaveBanner();
   alert('✓ South Barrington loaded! 3 VIPs, 9 ALC, 128 entries, $11,419 total, $6,000 payment, balance $5,419.');
   renderAdminTab(); renderPaymentsTable();
@@ -7315,7 +7319,7 @@ async function loadWestBloomfieldData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [
@@ -7440,7 +7444,7 @@ async function loadClearwaterData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [
@@ -7474,7 +7478,7 @@ async function loadGreenBaySouthData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [],
@@ -7507,7 +7511,7 @@ async function loadMadisonWestData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [
@@ -7548,7 +7552,7 @@ async function loadMenomoneeFallsData() {
   if (!appState.visitingStudios) appState.visitingStudios = [];
   if (!appState.visitingStudios.find(v=>v.name===studio&&v.comp===comp)) {
     appState.visitingStudios.push({ name:studio, comp });
-    await fbSet('visitingStudios', JSON.stringify(appState.visitingStudios));
+    await fbSetBacked('visitingStudios', JSON.stringify(appState.visitingStudios));
   }
   const data = {
     vip: [],
@@ -7644,7 +7648,7 @@ async function loadSeatingData() {
 
 async function saveSeatingData() {
   try {
-    await fbSet('seatingData', JSON.stringify(_seatingData));
+    await fbSetBacked('seatingData', JSON.stringify(_seatingData));
     showSaveBanner();
   } catch(e) { console.error('saveSeatingData error', e); }
 }
@@ -8006,6 +8010,150 @@ function printSeatingList(view) {
 // ── BACKUP SYSTEM ──
 const MAX_BACKUPS = 10;
 
+// ── EXTRA BACKUP LAYER (added on top of saveWithBackup; saveWithBackup itself is untouched) ──
+// 1) Hourly archive: one snapshot per hour per record, kept ~4 days. The rolling backups above only keep the
+//    last 10 saves, which a busy competition day can use up in minutes. This keeps older good versions.
+// 2) fbSetBacked: gives payments, settings, seating, checklists, etc. the same backup protection studios have.
+// 3) downloadFullBackup: one file with everything, saved on the organizer's own computer.
+const ARCHIVE_MAX = 96;
+const _archiveState = {}; // key -> { slot, sig, count }
+const _auxLastSig = {};
+
+function _hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; } return s.length + ':' + h; }
+function _hourSlot() { const n = new Date(); const p = x => String(x).padStart(2, '0'); return '' + n.getFullYear() + p(n.getMonth() + 1) + p(n.getDate()) + p(n.getHours()); }
+
+async function archiveHourly(key, dataStr) {
+  try {
+    const isStudio = key.indexOf('studioData::') === 0;
+    if (isStudio && !backupDataHasRealContent(dataStr)) return; // never archive an emptied record
+    await waitForFirebase();
+    const slot = _hourSlot();
+    const st = _archiveState[key] || (_archiveState[key] = { slot: null, sig: null, count: 0 });
+    const sig = _hashStr(dataStr);
+    if (st.slot === slot && st.sig === sig) return; // nothing changed since the last archive this hour
+    let count = 0;
+    if (isStudio) { try { count = countRealPeople(JSON.parse(dataStr)); } catch(e) {} }
+    if (isStudio && st.slot === slot && st.count > 3 && count < st.count * 0.5) return; // a sudden big drop must not overwrite this hour's good snapshot
+    const archKey = 'archive::' + key + '::' + slot;
+    await window._fbSetDoc(window._fbDoc(window._db, 'hub', archKey), { value: dataStr });
+    const isNewSlotForMe = st.slot !== slot;
+    st.slot = slot; st.sig = sig; st.count = count;
+    if (isNewSlotForMe) {
+      const raw = await fbGet('archiveIndex::' + key);
+      if (raw === undefined) return; // couldn't read the index; leave it alone rather than overwrite it
+      const index = raw ? JSON.parse(raw) : [];
+      if (!index.some(e => e.slot === slot)) {
+        index.push({ key: archKey, slot, ts: Date.now(), time: new Date().toLocaleString() });
+        while (index.length > ARCHIVE_MAX) { const old = index.shift(); if (old && old.key) await fbDelete(old.key); }
+        await window._fbSetDoc(window._fbDoc(window._db, 'hub', 'archiveIndex::' + key), { value: JSON.stringify(index) });
+      }
+    }
+  } catch(e) { console.warn('Hourly archive error (non-critical):', e); }
+}
+
+async function getArchives(key) {
+  try {
+    const raw = await fbGet('archiveIndex::' + key);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
+}
+
+// Wrap saveWithBackup so EVERY existing save (studios, lock/unlock, visiting studios, and the new extras) also gets the hourly archive.
+const _origSaveWithBackup = saveWithBackup;
+saveWithBackup = async function(key, data) {
+  const r = await _origSaveWithBackup(key, data);
+  try { await archiveHourly(key, typeof data === 'string' ? data : JSON.stringify(data)); } catch(e) {}
+  return r;
+};
+
+// Same as fbSet, but keeps backup copies when the content actually changed.
+async function fbSetBacked(key, value) {
+  const str = typeof value === 'string' ? value : JSON.stringify(value);
+  const sig = _hashStr(str);
+  if (_auxLastSig[key] === sig) { await fbSet(key, str); return; } // unchanged since last backed-up version: just write, no new backup
+  await saveWithBackup(key, str);
+  _auxLastSig[key] = sig;
+}
+
+// Before any restore overwrites live data, keep a copy of what is live right now.
+async function snapshotLiveBeforeRestore(key) {
+  try {
+    const live = await fbGet(key);
+    if (!live) return;
+    if (key.indexOf('studioData::') === 0 && !backupDataHasRealContent(live)) return; // don't spend a backup slot on an empty record
+    await saveWithBackup(key, live);
+  } catch(e) { console.warn('Pre-restore snapshot failed (continuing):', e); }
+}
+
+async function restoreAuxBackup(key, backupKey) {
+  if (!confirm('Restore this backup? What is live right now will be overwritten (a safety copy of it is kept first).')) return;
+  const data = await fbGet(backupKey);
+  if (!data) { alert('Backup not found.'); return; }
+  await snapshotLiveBeforeRestore(key);
+  await fbSet(key, data);
+  alert('✓ Restored! Refreshing...');
+  location.reload();
+}
+
+async function buildOtherDataBackupHTML(comp) {
+  const items = [
+    ['Studio list, PINs & competition settings', 'appState'],
+    ['Visiting studios list', 'visitingStudios'],
+    ['Seating chart', 'seatingData'],
+    ['Chicago Open checklists', CHECKS_KEY],
+    ['Room setup', SETUP_KEY],
+    ['Activity feed — ' + comp, 'lockActivity::' + comp]
+  ];
+  getAllStudiosForComp(comp).forEach(st => items.push(['Payments — ' + st, getPaymentKey(st, comp)]));
+  let out = '';
+  for (const [label, key] of items) {
+    const rolling = await getBackups(key);
+    const arch = await getArchives(key);
+    const all = rolling.concat(arch).sort((a, b) => b.ts - a.ts);
+    if (!all.length) continue;
+    out += `<details style="margin-bottom:0.5rem;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px">
+      <summary style="cursor:pointer;font-weight:700;font-size:0.72rem;color:var(--gold)">${label} <span style="font-weight:400;color:var(--muted)">(${all.length} backups)</span></summary>
+      ${all.map(b => `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid var(--border);font-size:0.7rem">
+        <span style="color:var(--muted)">${b.time}</span>
+        <button onclick="restoreAuxBackup('${key.replace(/'/g, "\\'")}','${b.key}')" style="background:#27ae60;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:0.65rem">↩ Restore</button>
+      </div>`).join('')}
+    </details>`;
+  }
+  if (!out) return '';
+  return `<div style="margin-top:1rem;font-weight:700;font-size:0.8rem">Other saved data</div><div style="font-size:0.65rem;color:var(--muted);margin-bottom:0.5rem">Payments, settings, seating and more. Backups start from the first save after this update.</div>` + out;
+}
+
+async function downloadFullBackup() {
+  if (!confirm('Download a complete backup of everything (all competitions, studios, requests, entries, payments, settings, seating)? This can take up to a minute.')) return;
+  const keys = ['appState', 'visitingStudios', 'seatingData', CHECKS_KEY, SETUP_KEY];
+  const comps = appState.competitions || [];
+  comps.forEach(c => {
+    keys.push('lockActivity::' + c);
+    getAllStudiosForComp(c).forEach(st => {
+      keys.push('studioData::' + st + '::' + c, getPaymentKey(st, c));
+      ['entryForms', 'waivers', 'summaryEntries'].forEach(t => keys.push(getDocKey(st, c, t)));
+    });
+  });
+  const uniq = [...new Set(keys)];
+  const items = {}; const failed = []; let empty = 0;
+  for (let i = 0; i < uniq.length; i += 10) {
+    const batch = uniq.slice(i, i + 10);
+    const vals = await Promise.all(batch.map(k => fbGet(k)));
+    batch.forEach((k, j) => { if (vals[j] === undefined) failed.push(k); else if (vals[j] === null) empty++; else items[k] = vals[j]; });
+  }
+  const payload = { exportedAt: new Date().toISOString(), appVersion: (document.documentElement.outerHTML.match(/APP_VERSION: ([0-9-]+)/) || [])[1] || '', items };
+  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'chicagofadscomps-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  showModal(failed.length ? '⚠️' : '✅', failed.length ? 'Backup downloaded — with problems' : 'Backup downloaded',
+    'Saved ' + Object.keys(items).length + ' records to your Downloads folder.' +
+    (failed.length ? '<br><br><strong style="color:var(--red)">' + failed.length + ' could not be read (connection problem) and are NOT in the file. Run it again.</strong>' : '') +
+    '<br><br>Keep this file somewhere safe (Google Drive / email it to yourself).');
+}
+
 async function saveWithBackup(key, data) {
   const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
   // Write primary directly to Firebase (not through fbSet to avoid infinite loop)
@@ -8126,7 +8274,7 @@ async function restoreAllWipedStudios(comp) {
       alreadyFine.push(studio);
       continue; // healthy — leave it completely alone
     }
-    const backups = await getBackups(key);
+    const backups = (await getBackups(key)).concat(await getArchives(key)).sort((a, b) => a.ts - b.ts); // rolling backups + hourly archives, oldest to newest
     let found = false;
     for (let i = backups.length - 1; i >= 0; i--) { // newest to oldest
       const b = backups[i];
@@ -8154,6 +8302,7 @@ async function restoreFromBackup(key, backupKey) {
   if (!confirm('Restore this backup? Current data will be overwritten.')) return;
   const data = await fbGet(backupKey);
   if (!data) { alert('Backup not found.'); return; }
+  await snapshotLiveBeforeRestore(key); // keep a copy of what is live right now before overwriting it
   await fbSet(key, data);
   // Reload the data
   appState.data[key] = JSON.parse(data);
@@ -8168,11 +8317,16 @@ async function showBackupManager() {
     <button class="btn btn-sm" style="width:100%;background:var(--gold);color:#000;margin:0" onclick="restoreAllWipedStudios('${comp}')">🚑 Restore All Wiped Studios (${comp}) to Last Good Backup</button>
     <p style="font-size:0.65rem;color:var(--muted);margin-top:0.4rem;margin-bottom:0">Only touches studios whose live data is currently empty. Healthy studios are left alone. Automatically skips any backup that's also empty.</p>
   </div>
+  <div style="margin-bottom:1rem;padding:0.75rem;background:#eef6ff;border:1px solid #4a90d9;border-radius:6px">
+    <button class="btn btn-sm" style="width:100%;background:#4a90d9;color:#fff;margin:0" onclick="downloadFullBackup()">⬇️ Download Full Backup File (everything)</button>
+    <p style="font-size:0.65rem;color:var(--muted);margin-top:0.4rem;margin-bottom:0">One file with every studio, request, entry, payment and setting, saved on your own computer. Do this before each competition.</p>
+  </div>
   <div style="max-height:50vh;overflow-y:auto">`;
   for (const studio of allStudios) {
     const key = 'studioData::' + studio + '::' + comp;
     const backups = await getBackups(key);
-    if (!backups.length) continue;
+    const archives = (await getArchives(key)).slice().reverse();
+    if (!backups.length && !archives.length) continue;
     html += `<div style="margin-bottom:1rem;padding:0.75rem;border:1px solid var(--border);border-radius:6px">
       <div style="font-weight:700;color:var(--gold);margin-bottom:0.5rem">${studio}</div>
       ${[...backups].reverse().map(b => `
@@ -8183,8 +8337,16 @@ async function showBackupManager() {
             <button onclick="restoreFromBackup('${key}','${b.key}')" style="background:#27ae60;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:0.65rem">↩ Restore</button>
           </span>
         </div>`).join('')}
+      ${archives.length ? `<details style="margin-top:0.4rem"><summary style="cursor:pointer;font-size:0.68rem;color:var(--muted)">Older hourly snapshots (${archives.length})</summary>
+        ${archives.map(b => `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid var(--border);font-size:0.7rem">
+          <span style="color:var(--muted)">${b.time}</span>
+          <span style="display:flex;gap:0.4rem">
+            <button onclick="viewBackupSnapshot('${b.key}','${studio.replace(/'/g,"\\'")}','${b.time}')" style="background:#4a90d9;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:0.65rem">👁️ View</button>
+            <button onclick="restoreFromBackup('${key}','${b.key}')" style="background:#27ae60;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:0.65rem">↩ Restore</button>
+          </span></div>`).join('')}</details>` : ''}
     </div>`;
   }
+  html += await buildOtherDataBackupHTML(comp);
   html += '</div>';
   document.getElementById('modalIcon').textContent = '💾';
   document.getElementById('modalTitle').textContent = 'Backup Manager — ' + comp;
@@ -8636,7 +8798,7 @@ async function loadChecksData() {
 }
 
 async function saveChecksData() {
-  await fbSet(CHECKS_KEY, JSON.stringify(checksData));
+  await fbSetBacked(CHECKS_KEY, JSON.stringify(checksData));
   showSaveBanner();
 }
 
@@ -9356,7 +9518,7 @@ async function loadSetupData() {
   return setupData;
 }
 async function saveSetupData() {
-  await fbSet(SETUP_KEY, JSON.stringify(setupData));
+  await fbSetBacked(SETUP_KEY, JSON.stringify(setupData));
   showSaveBanner();
 }
 
