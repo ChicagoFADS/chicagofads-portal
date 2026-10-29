@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Chicago FADS Competition Hub</title>
-<!-- APP_VERSION: 2026-10-29-1000 (bump this string on every deploy) -->
+<!-- APP_VERSION: 2026-10-29-1100 (bump this string on every deploy) -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -1576,6 +1576,17 @@ async function saveState() {
                       (d.compEntries && d.compEntries.some(r => r.vipQty || r.alcQty)) ||
                       (d.danceEntries && d.danceEntries.length > 0) ||
                       (d.requests && d.requests.length > 0);
+      // V2 (per-person) records: the protected checks around here only look at the old format. These two additions
+      // give à-la-carte people stored in d.people the same protection. The protected lines themselves are unchanged.
+      if (Array.isArray(d.people) && !d.people.some(r => r.name)) {
+        try {
+          const _liveStr = await fbGet('studioData::' + key);
+          if (_liveStr && countRealPeople(JSON.parse(_liveStr)) > 0 && countRealPeople(d) === 0) {
+            console.warn('Blocked save for', key, '— would erase every person');
+            continue;
+          }
+        } catch(e) { /* if the check can't run, fall through to the normal rules */ }
+      }
       if (hasData) {
         // Read-before-write protection — never overwrite Firebase with fewer people
         try {
@@ -1592,6 +1603,11 @@ async function saveState() {
             }
           }
         } catch(e) { /* if read fails, proceed with save */ }
+        await saveWithBackup('studioData::' + key, JSON.stringify(d));
+        _dirtyDataKeys.delete(key);
+      }
+      else if (Array.isArray(d.people) && d.people.some(r => r.name)) {
+        // A studio whose only content is à-la-carte people (no VIPs / entries / requests yet) — the check above doesn't count d.people, so it was never saved.
         await saveWithBackup('studioData::' + key, JSON.stringify(d));
         _dirtyDataKeys.delete(key);
       }
@@ -3249,12 +3265,39 @@ function submitAndLockRoster() {
   );
 }
 
+async function saveAndConfirmBeforeLock() {
+  // Locking reloads the stored record. So first make sure what is on screen is saved and reads back identical —
+  // otherwise the lock would silently replace unsaved work with an older stored copy.
+  try {
+    const key = currentStudio + '::' + currentComp;
+    const d = getStudioData(currentStudio, currentComp);
+    if (!d.locked) {
+      clearTimeout(autoSaveTimer);
+      _dirtyDataKeys.add(key);
+      const ok = await saveState();
+      if (!ok) { showSubmitFailure('Your roster could not be saved, so it was NOT locked.'); return false; }
+    }
+    const freshStr = await fbGet('studioData::' + key);
+    if (freshStr === undefined) { showSubmitFailure('Your data could not be read back, so it was NOT locked.'); return false; }
+    let fresh = {};
+    if (freshStr) { try { fresh = JSON.parse(freshStr); } catch (e) { showSubmitFailure('The stored copy could not be read, so it was NOT locked.'); return false; } }
+    if (verifySignature(d) !== verifySignature(fresh)) { showSubmitFailure('What is stored does not match what is on your screen, so your roster was NOT locked.'); return false; }
+    return true;
+  } catch (e) {
+    console.error('saveAndConfirmBeforeLock error', e);
+    showSubmitFailure('Something went wrong while saving, so your roster was NOT locked.');
+    return false;
+  }
+}
+
 async function confirmLockAndProceed() {
+  if (!(await saveAndConfirmBeforeLock())) return;
   await lockStudioRoster(currentStudio, currentComp, currentStudio);
   loadStudioData();
 }
 
 async function relockRoster() {
+  if (!(await saveAndConfirmBeforeLock())) return;
   await lockStudioRoster(currentStudio, currentComp, currentStudio);
   loadStudioData();
 }
