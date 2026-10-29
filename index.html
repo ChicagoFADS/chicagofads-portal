@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Chicago FADS Competition Hub</title>
-<!-- APP_VERSION: 2026-10-29-1200 (bump this string on every deploy) -->
+<!-- APP_VERSION: 2026-10-29-1300 (bump this string on every deploy) -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -1373,7 +1373,7 @@ async function loadState() {
       const val = await fbGet('studioData::' + key);
       if (val !== undefined) {
         // Success — real data, or confirmed-empty from Firestore
-        if (val) appState.data[key] = JSON.parse(val);
+        if (val) { appState.data[key] = JSON.parse(val); try { _peopleSeen[key] = countRealPeople(appState.data[key]); } catch(e) {} }
         snapshotForChangeLog(key);
         _loadedKeys.add(key);
       }
@@ -1428,7 +1428,7 @@ async function ensureStudioLoaded(studio, comp, forceReload = false) {
     const val = await fbGet('studioData::' + key);
     if (val !== undefined) {
       // Success — val is real saved data, or null meaning Firestore confirms nothing exists yet (genuinely new/empty studio)
-      if (val) appState.data[key] = JSON.parse(val);
+      if (val) { appState.data[key] = JSON.parse(val); try { _peopleSeen[key] = countRealPeople(appState.data[key]); } catch(e) {} }
       snapshotForChangeLog(key);
       _loadedKeys.add(key);
       return true;
@@ -1447,6 +1447,7 @@ async function ensureStudioLoaded(studio, comp, forceReload = false) {
 // Entries live on the record itself, so they are backed up with everything else and can never
 // clobber another studio's log.
 let _changeSnapshots = {};
+const _peopleSeen = {}; // key -> how many people THIS page last saw stored for that studio (tells a deliberate delete from an out-of-date page)
 
 function changeView(d) {
   // A comparable, format-independent picture of a studio's data
@@ -1594,6 +1595,7 @@ async function saveState() {
       if (!_dirtyDataKeys.has(key)) continue; // never re-save a studio that wasn't actually edited this session — prevents stale in-memory copies overwriting real current data
       let d = appState.data[key];
       if (!d) continue;
+      if (countRealPeople(d) > 0) _peopleSeen[key] = countRealPeople(d);
       d = await mergeWithFreshBeforeSave(key, d); // fold in anything newer that's live in Firestore before this write proceeds
       d.lastEditedAt = Date.now(); // for the "changed since I last checked" view — a plain timestamp, not part of the protected save logic
       recordChangeLog(key, d);
@@ -1617,6 +1619,14 @@ async function saveState() {
           const _liveStr = await fbGet('studioData::' + key);
           const _live = _liveStr ? JSON.parse(_liveStr) : null;
           if (_live && countRealPeople(_live) > 0 && countRealPeople(d) === 0) {
+            if ((_peopleSeen[key] || 0) > 0 && countRealPeople(_live) <= _peopleSeen[key]) {
+              // Not a stale page: this page showed people and the person here removed them, and nobody else has added anyone since.
+              // Honour the deletion (it is still recoverable from the backups made before it).
+              await saveWithBackup('studioData::' + key, JSON.stringify(d));
+              _dirtyDataKeys.delete(key);
+              _peopleSeen[key] = 0;
+              continue;
+            }
             // This page is showing an older, emptier copy than what is stored (someone saved from another device).
             // Never erase them: take the stored roster, keep this page's own other changes (e.g. a new request), and save that.
             console.warn('Stale page for', key, '— adopting the stored roster instead of erasing it');
