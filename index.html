@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Chicago FADS Competition Hub</title>
-<!-- APP_VERSION: 2026-10-29-1300 (bump this string on every deploy) -->
+<!-- APP_VERSION: 2026-11-04-1900 (bump this string on every deploy) -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -2152,7 +2152,7 @@ function renderPeopleListV2(d) {
       ? `<div class="chk-row">
           <span class="vip-badge">ALL MEALS ✓</span>
           <span class="chk-sep"></span>
-          <select class="dinner-inline${!p.satMealChoice?' missing':''}" onchange="updatePersonMealChoiceV2('${p.id}',this.value)">
+          <select class="dinner-inline${(!p.satMealChoice && getMealChoices(currentComp).length > 0)?' missing':''}" onchange="updatePersonMealChoiceV2('${p.id}',this.value)">
             <option value="">Dinner?</option>
             ${getMealOptions(p.satMealChoice, currentComp)}
             <option ${p.satMealChoice==='Kids Meal'?'selected':''}>Kids Meal</option>
@@ -2649,7 +2649,7 @@ function renderPeopleList(d) {
       ? `<div class="chk-row">
           <span class="vip-badge">ALL MEALS ✓</span>
           <span class="chk-sep"></span>
-          <select class="dinner-inline${!m.satMealChoice?' missing':''}" onchange="updatePersonMealChoice(${i},this.value)">
+          <select class="dinner-inline${(!m.satMealChoice && getMealChoices(currentComp).length > 0)?' missing':''}" onchange="updatePersonMealChoice(${i},this.value)">
             <option value="">Dinner?</option>
             ${getMealOptions(m.satMealChoice, currentComp)}
             <option ${m.satMealChoice==='Kids Meal'?'selected':''}>Kids Meal</option>
@@ -3165,7 +3165,7 @@ function calcAlcMealRevenue(d) {
 function checkMealChoice(i) {
   const d = getStudioData(currentStudio, currentComp);
   const r = d.meals[i] || {};
-  const missing = r.satCocktail && !r.childrenMeal && !r.satMealChoice;
+  const missing = r.satCocktail && !r.childrenMeal && !r.satMealChoice && getMealChoices(currentComp).length > 0; // events with no dinner choices (stations) never flag
   const sel = document.getElementById('mealChoice' + i);
   if (sel) {
     sel.style.outline = missing ? '2px solid var(--red)' : '';
@@ -4124,7 +4124,8 @@ async function renderOverview() {
     const d = getStudioData(s, comp);
     const b = getBanquetAttendees(d);
     const diners = b.totalCount;
-    const missing = b.vipAttendees.filter(r=>!r.meal).length +
+    const missing = getMealChoices(comp).length === 0 ? 0 : // stations event: nobody has to pick a dinner
+                    b.vipAttendees.filter(r=>!r.meal).length +
                     b.alcAttendees.filter(r=>!r.childrenMeal && !r.satMealChoice).length +
                     b.creditGuests.filter(c=>!c.usedMealChoice).length;
     if (diners > 0) {
@@ -8737,9 +8738,11 @@ async function generateStatusSummaryPDF() {
 
     // Missing meal choices
     const missingMeals = [];
-    d.vip.filter(r=>r.name && !r.meal).forEach(r => missingMeals.push(r.name));
-    getBanquetAttendees(d).alcAttendees.filter(r=>!r.childrenMeal && !r.satMealChoice)
-           .forEach(r => missingMeals.push(r.name));
+    if (getMealChoices(comp).length > 0) { // stations event: no dinner choices to chase
+      d.vip.filter(r=>r.name && !r.meal).forEach(r => missingMeals.push(r.name));
+      getBanquetAttendees(d).alcAttendees.filter(r=>!r.childrenMeal && !r.satMealChoice)
+             .forEach(r => missingMeals.push(r.name));
+    }
 
     rows.push({ studio, balance, totalOwed, totalPaid, missingMeals });
   }
@@ -9288,7 +9291,7 @@ async function generateStudioSummaryPDF(studio, comp) {
           <td>${r.proam||''}</td>
           <td><span class="sessions">Full Package</span></td>
           <td><span class="gift">✓</span></td>
-          <td>${r.meal||'<span class="miss">Missing</span>'}</td>
+          <td>${r.meal||(getMealChoices(comp).length > 0 ? '<span class="miss">Missing</span>' : 'Stations')}</td>
         </tr>`),
       ...d.tickets.filter(r=>r.name).map(r=>{
         const sess = ['thuMat','thuEve','friMat','friEve','satMat'].filter(s=>r[s]).map(s=>sessionLabels[s]).join(', ');
