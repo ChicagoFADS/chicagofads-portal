@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Chicago FADS Competition Hub</title>
-<!-- APP_VERSION: 2026-11-04-1900 (bump this string on every deploy) -->
+<!-- APP_VERSION: 2026-11-10-2100 (bump this string on every deploy) -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -1243,6 +1243,22 @@ let _dirtyDataKeys = new Set(); // studio::comp keys actually edited this sessio
 // Rows are matched by name where possible so two different real changes don't erase each other.
 // Any failure here just falls back to the local copy exactly as before — this can only make a save
 // safer, never worse or blocked.
+// Empty slots in a saved list come back from the database as null (e.g. typing in a later division in Comp Entries
+// before the earlier ones). The protected save check below reads r.vipQty on every row, so one null row crashed
+// every save for that studio. This puts a blank row in place of any null, keeping every row in its position.
+function fillNullRows(d) {
+  try {
+    if (!d) return d;
+    ['compEntries','vip','tickets','meals','people'].forEach(f => {
+      const a = d[f];
+      if (!Array.isArray(a)) return;
+      for (let i = 0; i < a.length; i++) if (!a[i] || typeof a[i] !== 'object') a[i] = {};
+    });
+    if (Array.isArray(d.danceEntries)) d.danceEntries = d.danceEntries.filter(Boolean);
+  } catch(e) { console.warn('fillNullRows failed', e); }
+  return d;
+}
+
 function studioRecordHasRealContent(d) {
   try {
     return !!(
@@ -1596,6 +1612,7 @@ async function saveState() {
       let d = appState.data[key];
       if (!d) continue;
       if (countRealPeople(d) > 0) _peopleSeen[key] = countRealPeople(d);
+      fillNullRows(d); // a null row left by an earlier save would crash the protected check below
       d = await mergeWithFreshBeforeSave(key, d); // fold in anything newer that's live in Firestore before this write proceeds
       d.lastEditedAt = Date.now(); // for the "changed since I last checked" view — a plain timestamp, not part of the protected save logic
       recordChangeLog(key, d);
@@ -3070,6 +3087,7 @@ function syncDanceEntriesToCompEntries(d) {
 
   // Put them in the first division (Pro/Am Amateur — Single Dance)
   const idx = 0;
+  while (d.compEntries.length <= idx) d.compEntries.push({}); // no empty slots
   if (!d.compEntries[idx]) d.compEntries[idx] = {};
   if (vipDances > 0) d.compEntries[idx].vipQty = vipDances;
   if (alcDances > 0) d.compEntries[idx].alcQty = alcDances;
@@ -3106,6 +3124,7 @@ function renderCompEntriesTable(saved) {
 function updateCompEntry(idx, field, value) {
   if (lockBlocksEdit()) { showLockedNotice(); return; }
   const d = getStudioData(currentStudio, currentComp);
+  while (d.compEntries.length <= idx) d.compEntries.push({}); // no empty slots
   if (!d.compEntries[idx]) d.compEntries[idx] = {};
   d.compEntries[idx][field] = value;
   // refresh row display using original COMP_DIVISIONS index
